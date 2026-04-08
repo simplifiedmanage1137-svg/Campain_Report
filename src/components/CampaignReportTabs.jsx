@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas';
 const CustomDatePicker = ({ value, onChange, placeholder = "DD/MM/YYYY" }) => {
   const [displayValue, setDisplayValue] = useState('');
   const inputRef = useRef(null);
+  const hiddenDateRef = useRef(null);
 
   useEffect(() => {
     if (value) {
@@ -21,6 +22,10 @@ const CustomDatePicker = ({ value, onChange, placeholder = "DD/MM/YYYY" }) => {
       }
     } else {
       setDisplayValue('');
+    }
+
+    if (hiddenDateRef.current) {
+      hiddenDateRef.current.value = value || '';
     }
   }, [value]);
 
@@ -44,26 +49,20 @@ const CustomDatePicker = ({ value, onChange, placeholder = "DD/MM/YYYY" }) => {
     }
   };
 
+  const handleNativeDateChange = (e) => {
+    if (e.target.value) {
+      onChange(e.target.value);
+    }
+  };
+
   const openCalendar = () => {
-    const hiddenInput = document.createElement('input');
-    hiddenInput.type = 'date';
-    hiddenInput.style.position = 'absolute';
-    hiddenInput.style.opacity = '0';
-    hiddenInput.style.pointerEvents = 'none';
-    document.body.appendChild(hiddenInput);
-
-    hiddenInput.addEventListener('change', (e) => {
-      if (e.target.value) {
-        onChange(e.target.value);
-      }
-      document.body.removeChild(hiddenInput);
-    });
-
-    hiddenInput.showPicker();
+    if (hiddenDateRef.current) {
+      hiddenDateRef.current.showPicker();
+    }
   };
 
   return (
-    <div style={{ display: 'flex', gap: '5px' }}>
+    <div style={{ position: 'relative', display: 'flex', gap: '5px' }}>
       <Form.Control
         ref={inputRef}
         type="text"
@@ -71,6 +70,23 @@ const CustomDatePicker = ({ value, onChange, placeholder = "DD/MM/YYYY" }) => {
         value={displayValue}
         onChange={handleDateChange}
         size="sm"
+      />
+      <input
+        ref={hiddenDateRef}
+        type="date"
+        onChange={handleNativeDateChange}
+        style={{
+          position: 'absolute',
+          right: '0',
+          top: '0',
+          width: '1px',
+          height: '1px',
+          opacity: 0,
+          pointerEvents: 'none',
+          border: 'none',
+          padding: 0,
+          margin: 0
+        }}
       />
       <Button
         variant="outline-secondary"
@@ -249,7 +265,7 @@ const CampaignReportTabs = () => {
 
   const [speedEntries, setSpeedEntries] = useState([
     { id: Date.now(), value: '' }
-    ]);
+  ]);
 
   const [screenshotImage, setScreenshotImage] = useState(null);
   const navigate = useNavigate();
@@ -721,19 +737,22 @@ const CampaignReportTabs = () => {
     });
 
     try {
-      // Helper function to add page with proper scaling
-      const addPageToPDF = async (elementCreator, pdfDoc) => {
+      // Helper function to add page with proper scaling and no extra spacing
+      const addPageToPDF = async (elementCreator, pdfDoc, isFirstPage = false) => {
         const element = elementCreator();
         document.body.appendChild(element);
 
         // Get element dimensions
-        const width = element.offsetWidth;
-        const height = element.offsetHeight;
+        const actualWidth = element.offsetWidth;
+        const actualHeight = element.offsetHeight;
 
-        // Calculate scale to fit on A4 landscape (297mm x 210mm)
+        // A4 Landscape dimensions in mm
         const pdfWidth = 297;
         const pdfHeight = 210;
-        const scale = Math.min(pdfWidth / (width / 3.78), pdfHeight / (height / 3.78));
+
+        // Calculate scale to fit width exactly
+        const scale = pdfWidth / (actualWidth / 3.78);
+        const scaledHeight = (actualHeight / 3.78) * scale;
 
         const canvas = await html2canvas(element, {
           scale: 3,
@@ -741,43 +760,46 @@ const CampaignReportTabs = () => {
           logging: false,
           allowTaint: false,
           backgroundColor: '#fdfbf2',
-          windowWidth: width,
-          windowHeight: height
+          windowWidth: actualWidth,
+          windowHeight: actualHeight
         });
 
         const imgData = canvas.toDataURL('image/png');
-        const imgWidth = pdfWidth;
-        const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-        // Center the image vertically if it's shorter than page
-        const yOffset = Math.max(0, (pdfHeight - imgHeight) / 2);
+        // For first page, add image from top
+        if (isFirstPage) {
+          pdfDoc.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+        } else {
+          // For subsequent pages, center vertically but remove bottom spacing
+          const yOffset = Math.max(0, (pdfHeight - scaledHeight) / 2);
+          pdfDoc.addImage(imgData, 'PNG', 0, yOffset, pdfWidth, scaledHeight);
+        }
 
-        pdfDoc.addImage(imgData, 'PNG', 0, yOffset, imgWidth, imgHeight);
         document.body.removeChild(element);
       };
 
-      // Campaign Page
-      await addPageToPDF(createCampaignPage, pdf);
+      // Campaign Page (First page)
+      await addPageToPDF(createCampaignPage, pdf, true);
 
       // Outbound Page
       pdf.addPage();
-      await addPageToPDF(createOutboundPage, pdf);
+      await addPageToPDF(() => createOutboundPageWithDynamicHeight(), pdf, false);
 
       // PoC Opens Page
       pdf.addPage();
-      await addPageToPDF(createPocOpensPage, pdf);
+      await addPageToPDF(() => createPocOpensPageWithNoSpacing(), pdf, false);
 
       // PoC Clicks Page
       pdf.addPage();
-      await addPageToPDF(createPocClicksPage, pdf);
+      await addPageToPDF(() => createPocClicksPageWithNoSpacing(), pdf, false);
 
       // Landing Page
       pdf.addPage();
-      await addPageToPDF(createLandingPage, pdf);
+      await addPageToPDF(() => createLandingPageWithNoSpacing(), pdf, false);
 
       // Web Vitals Page
       pdf.addPage();
-      await addPageToPDF(createWebVitalsPage, pdf);
+      await addPageToPDF(createWebVitalsPage, pdf, false);
 
       // Save the PDF
       pdf.save('Complete_Campaign_Report.pdf');
@@ -815,6 +837,643 @@ const CampaignReportTabs = () => {
   `;
     return div;
   };
+
+  const createOutboundPageWithDynamicHeight = () => {
+    const data = outboundData;
+    const formatDate = (date) => {
+      if (!date) return '';
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
+    };
+
+    const validEntries = data.pacingEntries.filter(e => e.date && e.value);
+    const values = validEntries.map(entry => parseFloat(entry.value) || 0);
+    const maxValue = Math.max(...values, 2500);
+
+    // Dynamic height based on max value
+    let graphHeight = 150;
+    if (maxValue > 5000) graphHeight = 200;
+    if (maxValue > 10000) graphHeight = 250;
+    if (maxValue > 20000) graphHeight = 300;
+
+    const w = 550;
+    const h = graphHeight;
+    const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
+    const points = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
+    const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
+    const area = `0,${h} ${areaPoints} ${w},${h}`;
+
+    // Pie chart calculations
+    const security = parseFloat(data.formData.securityPerc) || 0;
+    const safety = parseFloat(data.formData.safetyPerc) || 0;
+    const others = parseFloat(data.formData.othersPerc) || 0;
+    const total = security + safety + others;
+    const securityPercent = total > 0 ? (security / total) * 100 : 0;
+    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
+    const othersPercent = total > 0 ? (others / total) * 100 : 0;
+
+    const securityAngle = (securityPercent / 100) * 360;
+    const safetyAngle = (safetyPercent / 100) * 360;
+    const othersAngle = (othersPercent / 100) * 360;
+    const securityMidAngle = securityAngle / 2;
+    const safetyMidAngle = securityAngle + (safetyAngle / 2);
+    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
+
+    const getLabelPosition = (midAngle, distance) => {
+      const rad = (midAngle - 90) * Math.PI / 180;
+      return { x: 105 + (distance * Math.cos(rad)), y: 105 + (distance * Math.sin(rad)) };
+    };
+
+    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
+    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
+    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
+
+    const createPieSegment = (startAngle, angle) => {
+      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
+        return '';
+      }
+      const endAngle = startAngle + angle;
+      const startRad = (startAngle - 90) * Math.PI / 180;
+      const endRad = (endAngle - 90) * Math.PI / 180;
+      const x1 = 105 + 80 * Math.cos(startRad);
+      const y1 = 105 + 80 * Math.sin(startRad);
+      const x2 = 105 + 80 * Math.cos(endRad);
+      const y2 = 105 + 80 * Math.sin(endRad);
+      const largeArc = angle > 180 ? 1 : 0;
+      return `M 105,105 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
+    };
+
+    // Bounce rate calculations
+    const bounceRate = parseFloat(data.formData.bounceRate) || 0;
+    const maxBounce = 10;
+    const bounceDashoffset = 251 - (bounceRate / maxBounce) * 251;
+
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = 'auto';
+    div.style.minHeight = '794px';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    div.innerHTML = `
+    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
+      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">Outbound Performance</h1>
+      <span style="color: #fff; margin-left: 15px; font-size: 24px;">(${formatDate(data.formData.startDate)} - ${formatDate(data.formData.endDate)})</span>
+    </div>
+    <div style="display: flex; gap: 20px;">
+      <div style="width: 330px;">
+        <div style="background-color: #4db69f; color: #fff; padding: 40px 20px; text-align: center; border-radius: 8px;">
+          <h4 style="font-weight: 400; font-size: 24px; margin-bottom: 20px;">Total Emails Sent</h4>
+          <div style="font-size: 80px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
+        </div>
+        <div style="margin-top: 40px; position: relative; width: 300px; height: 300px; margin: 40px auto 0;">
+          <svg width="300" height="300" viewBox="0 0 210 210">
+            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
+            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
+            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
+            <circle cx="105" cy="105" r="35" fill="#fdfbf2" />
+          </svg>
+          <div style="position: absolute; left: ${(securityLabelPos.x / 210) * 300}px; top: ${(securityLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(safetyLabelPos.x / 210) * 300}px; top: ${(safetyLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(othersLabelPos.x / 210) * 300}px; top: ${(othersLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
+        </div>
+      </div>
+      <div style="flex: 1;">
+        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Total Delivered</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Daily Avg Sends</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Hard Bounced</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalHardBounced}</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+          <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Bounce Rate</h5>
+            <div style="text-align: center;">
+              <svg width="180" height="120" viewBox="0 0 180 120">
+                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
+                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#28a745" stroke-width="15" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="${bounceDashoffset}" />
+                <line x1="90" y1="100" x2="90" y2="50" stroke="#28a745" stroke-width="3" stroke-linecap="round" transform="rotate(${(bounceRate / maxBounce) * 180 - 90}, 90, 100)" />
+                <circle cx="90" cy="100" r="8" fill="#28a745" />
+              </svg>
+              <div style="font-size: 48px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
+            </div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa; text-align: right;">Daily Pacing Dynamic</h5>
+            <div style="display: flex; margin-top: 15px;">
+              <div style="height: ${h}px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; color: #bbb; padding-right: 12px;">
+                <span>${maxValue}</span>
+                <span>${Math.floor(maxValue / 2)}</span>
+                <span>0</span>
+              </div>
+              <div style="flex: 1; border-left: 1px solid #eee; border-bottom: 1px solid #eee;">
+                <svg width="100%" height="${h}" viewBox="0 0 550 ${h}" preserveAspectRatio="none">
+                  <polyline points="${area}" fill="#9bd9cc" fill-opacity="0.4" />
+                  <polyline points="${points}" fill="none" stroke="#4db69f" stroke-width="3" />
+                </svg>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #bbb; font-size: 13px; padding-left: 45px;">
+              <span>${validEntries[0]?.date ? formatDate(validEntries[0].date) : formatDate(data.formData.startDate)}</span>
+              <span>Daily Timeline</span>
+              <span>${validEntries[validEntries.length - 1]?.date ? formatDate(validEntries[validEntries.length - 1].date) : formatDate(data.formData.endDate)}</span>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 15px;">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">EC Delivered - Managers</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.ecManagers}%</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">EC Delivered - Directors</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.ecDirectors}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+    return div;
+  };
+
+  const getDynamicBarChartHeight = (bars) => {
+    if (!bars || bars.length === 0) {
+      return 180; // minimum height jab koi data nahi ho
+    }
+
+    const numBars = bars.length;
+    const maxValue = Math.max(...bars.map(b => b.value), 100);
+
+    let height = 180;
+
+    // Number of bars ke hisaab se height decide karo
+    if (numBars <= 3) height = 180;
+    else if (numBars <= 5) height = 220;
+    else if (numBars <= 7) height = 280;
+    else height = 340;   // 8+ bars ke liye
+
+    // Agar values bahut badi hain toh extra height do
+    if (maxValue > 150) height += 30;
+    if (maxValue > 250) height += 40;
+
+    // Maximum limit lagao taaki page overflow na ho
+    return Math.min(height, 400);
+  };
+
+  const createPocOpensPageWithNoSpacing = () => {
+    const data = pocOpensData;
+
+    const formatDateForDisplayFn = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+    };
+
+    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
+    const bars = validEntries.map(entry => ({
+      label: formatDateForDisplayFn(entry.date),
+      value: parseInt(entry.value) || 0
+    }));
+
+    const dynamicBarHeight = getDynamicBarChartHeight(bars);
+
+    // ==================== PIE CHART CALCULATIONS ====================
+    const security = parseFloat(data.formData.securityPerc) || 0;
+    const safety = parseFloat(data.formData.safetyPerc) || 0;
+    const others = parseFloat(data.formData.othersPerc) || 0;
+    const total = security + safety + others;
+
+    const securityPercent = total > 0 ? (security / total) * 100 : 0;
+    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
+    const othersPercent = total > 0 ? (others / total) * 100 : 0;
+
+    const securityAngle = (securityPercent / 100) * 360;
+    const safetyAngle = (safetyPercent / 100) * 360;
+    const othersAngle = (othersPercent / 100) * 360;
+
+    const getLabelPosition = (midAngle, distance) => {
+      const rad = (midAngle - 90) * Math.PI / 180;
+      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
+    };
+
+    const securityLabelPos = getLabelPosition(securityAngle / 2, 115);
+    const safetyLabelPos = getLabelPosition(securityAngle + (safetyAngle / 2), 115);
+    const othersLabelPos = getLabelPosition(securityAngle + safetyAngle + (othersAngle / 2), 115);
+
+    const createPieSegment = (startAngle, angle) => {
+      if (angle <= 0) return '';
+      const endAngle = startAngle + angle;
+      const startRad = (startAngle - 90) * Math.PI / 180;
+      const endRad = (endAngle - 90) * Math.PI / 180;
+      const x1 = 100 + 80 * Math.cos(startRad);
+      const y1 = 100 + 80 * Math.sin(startRad);
+      const x2 = 100 + 80 * Math.cos(endRad);
+      const y2 = 100 + 80 * Math.sin(endRad);
+      const largeArc = angle > 180 ? 1 : 0;
+      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
+    };
+
+    // ==================== BAR CHART HTML ====================
+    let barChartHtml = '';
+    if (bars.length > 0) {
+      const maxValue = Math.max(...bars.map(b => b.value), 1);
+      barChartHtml = bars.map((bar) => {
+        const percentage = (bar.value / maxValue) * 100;
+        return `
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+          <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
+          <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
+            <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
+          </div>
+          <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
+        </div>`;
+      }).join('');
+    } else {
+      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display...</div>';
+    }
+
+    // ==================== FINAL HTML ====================
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = 'auto';
+    div.style.minHeight = '794px';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    div.innerHTML = `
+    <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
+      <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle || 'PoC Opens'}</h1>
+      <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle || ''}</span>
+    </div>
+
+    <div style="display: flex; gap: 20px; align-items: flex-start;">
+      <!-- LEFT COLUMN -->
+      <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
+        <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
+          <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Opened</h4>
+          <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsOpened || 0}</div>
+        </div>
+
+        <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
+          <svg width="300" height="300" viewBox="0 0 200 200">
+            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
+            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
+            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
+            <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
+          </svg>
+          <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <!-- MIDDLE COLUMN -->
+      <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
+        <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Open Ratio</h5>
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" 
+              stroke-dasharray="${2 * Math.PI * 65}" 
+              stroke-dashoffset="${2 * Math.PI * 65 * (1 - (parseFloat(data.formData.ecOpenRatio) || 0) / 100)}" 
+              stroke-linecap="round" transform="rotate(-90 75 75)" />
+            <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecOpenRatio || 0}%</text>
+          </svg>
+        </div>
+        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <span style="font-size: 16px; color: #888;">Open Manager</span>
+          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openManager || 0}%</span>
+        </div>
+        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <span style="font-size: 16px; color: #888;">Open Director</span>
+          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openDirector || 0}%</span>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN - Dynamic Bar Chart -->
+      <div style="width: 380px; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); align-self: flex-start;">
+        <div style="text-align: right; margin-bottom: 20px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicBarHeight}px;">
+          ${barChartHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+    return div;
+  };
+
+
+  const createPocClicksPageWithNoSpacing = () => {
+    const data = pocOpensData;
+
+    const formatDateForDisplayFn = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '';
+      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
+    };
+
+    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
+    const bars = validEntries.map(entry => ({
+      label: formatDateForDisplayFn(entry.date),
+      value: parseInt(entry.value) || 0
+    }));
+
+    const dynamicBarHeight = getDynamicBarChartHeight(bars);
+
+    // ==================== PIE CHART CALCULATIONS ====================
+    const security = parseFloat(data.formData.securityPerc) || 0;
+    const safety = parseFloat(data.formData.safetyPerc) || 0;
+    const others = parseFloat(data.formData.othersPerc) || 0;
+    const total = security + safety + others;
+
+    const securityPercent = total > 0 ? (security / total) * 100 : 0;
+    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
+    const othersPercent = total > 0 ? (others / total) * 100 : 0;
+
+    const securityAngle = (securityPercent / 100) * 360;
+    const safetyAngle = (safetyPercent / 100) * 360;
+    const othersAngle = (othersPercent / 100) * 360;
+
+    const getLabelPosition = (midAngle, distance) => {
+      const rad = (midAngle - 90) * Math.PI / 180;
+      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
+    };
+
+    const securityLabelPos = getLabelPosition(securityAngle / 2, 115);
+    const safetyLabelPos = getLabelPosition(securityAngle + (safetyAngle / 2), 115);
+    const othersLabelPos = getLabelPosition(securityAngle + safetyAngle + (othersAngle / 2), 115);
+
+    const createPieSegment = (startAngle, angle) => {
+      if (angle <= 0) return '';
+      const endAngle = startAngle + angle;
+      const startRad = (startAngle - 90) * Math.PI / 180;
+      const endRad = (endAngle - 90) * Math.PI / 180;
+      const x1 = 100 + 80 * Math.cos(startRad);
+      const y1 = 100 + 80 * Math.sin(startRad);
+      const x2 = 100 + 80 * Math.cos(endRad);
+      const y2 = 100 + 80 * Math.sin(endRad);
+      const largeArc = angle > 180 ? 1 : 0;
+      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
+    };
+
+    // ==================== BAR CHART HTML ====================
+    let barChartHtml = '';
+    if (bars.length > 0) {
+      const maxValue = Math.max(...bars.map(b => b.value), 1);
+      barChartHtml = bars.map((bar) => {
+        const percentage = (bar.value / maxValue) * 100;
+        return `
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
+          <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
+          <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
+            <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
+          </div>
+          <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
+        </div>`;
+      }).join('');
+    } else {
+      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display...</div>';
+    }
+
+    // ==================== FINAL HTML ====================
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = 'auto';
+    div.style.minHeight = '794px';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    div.innerHTML = `
+    <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
+      <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle || 'PoC Opens'}</h1>
+      <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle || ''}</span>
+    </div>
+
+    <div style="display: flex; gap: 20px; align-items: flex-start;">
+      <!-- LEFT COLUMN -->
+      <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
+        <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
+          <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Opened</h4>
+          <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsOpened || 0}</div>
+        </div>
+
+        <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
+          <svg width="300" height="300" viewBox="0 0 200 200">
+            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
+            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
+            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
+            <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
+          </svg>
+          <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
+          <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
+        </div>
+      </div>
+
+      <!-- MIDDLE COLUMN -->
+      <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
+        <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Open Ratio</h5>
+          <svg width="150" height="150" viewBox="0 0 150 150">
+            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" 
+              stroke-dasharray="${2 * Math.PI * 65}" 
+              stroke-dashoffset="${2 * Math.PI * 65 * (1 - (parseFloat(data.formData.ecOpenRatio) || 0) / 100)}" 
+              stroke-linecap="round" transform="rotate(-90 75 75)" />
+            <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecOpenRatio || 0}%</text>
+          </svg>
+        </div>
+        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <span style="font-size: 16px; color: #888;">Open Manager</span>
+          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openManager || 0}%</span>
+        </div>
+        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <span style="font-size: 16px; color: #888;">Open Director</span>
+          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openDirector || 0}%</span>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN - Dynamic Bar Chart -->
+      <div style="width: 380px; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); align-self: flex-start;">
+        <div style="text-align: right; margin-bottom: 20px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
+        <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicBarHeight}px;">
+          ${barChartHtml}
+        </div>
+      </div>
+    </div>
+  `;
+
+    return div;
+  };
+
+  const createLandingPageWithNoSpacing = () => {
+    const data = landingPageData;
+
+    const locationData = data.stateEntries
+      .filter(entry => entry.state && entry.value)
+      .map(entry => ({
+        state: entry.state.trim(),
+        value: parseInt(entry.value) || 0
+      }));
+
+    if (locationData.length === 0) {
+      locationData.push({ state: "No Data", value: 10 });
+    }
+
+    const numBars = locationData.length;
+    const maxValue = Math.max(...locationData.map(d => d.value), 10);
+
+    // Dynamic Width
+    let chartWidth = 480;
+    if (numBars >= 5) chartWidth = 580;
+    if (numBars >= 6) chartWidth = 680;
+    if (numBars >= 7) chartWidth = 780;
+
+    const chartHeight = 260;
+    const barWidth = Math.max(32, Math.min(48, Math.floor((chartWidth - 80) / numBars)));
+    const startX = 55;
+
+    let barsSvg = '';
+    locationData.forEach((item, index) => {
+      const barHeight = Math.max(8, (item.value / maxValue) * (chartHeight - 60));
+      const x = startX + (index * (barWidth + 18));
+      const y = chartHeight - barHeight + 38;
+
+      barsSvg += `
+      <rect 
+        x="${x}" 
+        y="${y}" 
+        width="${barWidth}" 
+        height="${barHeight}" 
+        fill="#4db69f" 
+        rx="4" />
+      <text 
+        x="${x + barWidth / 2}" 
+        y="${y - 8}" 
+        text-anchor="middle" 
+        font-size="11" 
+        fill="#2c7a6f" 
+        font-weight="bold">${item.value}</text>
+    `;
+    });
+
+    // X-axis labels (Line ke Niche)
+    let xLabels = '';
+    locationData.forEach((item, index) => {
+      const x = startX + (index * (barWidth + 18)) + barWidth / 2;
+      xLabels += `
+      <text 
+        x="${x}" 
+        y="${chartHeight + 68}" 
+        text-anchor="middle" 
+        font-size="11" 
+        fill="#555" 
+        font-weight="500">${item.state}</text>
+    `;
+    });
+
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = 'auto';
+    div.style.minHeight = '794px';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    div.innerHTML = `
+    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
+      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">${data.formData.reportTitle || 'Landing Page Performance'}</h1>
+    </div>
+
+    <div style="display: flex; gap: 30px; margin-top: 20px;">
+      <div style="flex: 2;">
+        <div style="background: #fff; padding: 25px 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+          <h4 style="color: #444; margin-bottom: 22px; font-weight: 500; text-align: center;">Audience Location Overview</h4>
+          
+          <div style="position: relative; height: 360px;">
+            <svg width="100%" height="360" viewBox="0 0 ${chartWidth + 100} 360" preserveAspectRatio="xMidYMid meet">
+
+              <!-- Y Axis -->
+              <line x1="48" y1="45" x2="48" y2="${chartHeight + 45}" stroke="#ddd" stroke-width="1.5" />
+              <!-- X Axis Line -->
+              <line x1="48" y1="${chartHeight + 45}" x2="${chartWidth + 65}" y2="${chartHeight + 45}" stroke="#ddd" stroke-width="1.5" />
+
+              <!-- Y Labels -->
+              <text x="38" y="52" text-anchor="end" font-size="10.5" fill="#777">${maxValue}</text>
+              <text x="38" y="${chartHeight * 0.75 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.75)}</text>
+              <text x="38" y="${chartHeight * 0.5 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.5)}</text>
+              <text x="38" y="${chartHeight * 0.25 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.25)}</text>
+              <text x="38" y="${chartHeight + 52}" text-anchor="end" font-size="10.5" fill="#777">0</text>
+
+              ${barsSvg}
+              ${xLabels}
+
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Side Metrics -->
+      <div style="flex: 1; display: flex; flex-direction: column; gap: 16px;">
+        <div style="display: flex; gap: 16px;">
+          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Total Users</h5>
+            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.totalUsers || 0}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Avg. Session</h5>
+            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.avgSession || 0}</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 16px;">
+          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Bounced Users</h5>
+            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.bouncedUsers || 0}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
+            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Form Downloads</h5>
+            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.formDownloads || 0}</div>
+          </div>
+        </div>
+
+        <div style="background: #fff; padding: 28px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-top: 8px;">
+          <h5 style="color: #888; font-size: 14px; margin-bottom: 12px;">Bounce Rate</h5>
+          <svg width="138" height="138" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="56" fill="transparent" stroke="#e5e7eb" stroke-width="16" />
+            <circle cx="70" cy="70" r="56" fill="transparent" stroke="#f59e0b" stroke-width="16"
+              stroke-dasharray="${2 * Math.PI * 56}"
+              stroke-dashoffset="${2 * Math.PI * 56 * (1 - (parseFloat(data.formData.bounceRate) || 0) / 100)}"
+              stroke-linecap="round" transform="rotate(-90 70 70)" />
+            <text x="70" y="82" text-anchor="middle" font-size="28" font-weight="700" fill="#1f2937">${data.formData.bounceRate || 0}%</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  `;
+
+    return div;
+  };
+
 
   const createOutboundPage = () => {
     const data = outboundData;
@@ -978,6 +1637,8 @@ const CampaignReportTabs = () => {
     };
 
     const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
+    const totalDataSum = validEntries.reduce((sum, e) => sum + (parseInt(e.value) || 0), 0);
+    const dynamicHeight = Math.max(80, Math.min(300, validEntries.length * 20 + Math.ceil(totalDataSum / 60)));
     const bars = validEntries.map(entry => ({
       label: formatDateForDisplayFn(entry.date),
       value: parseInt(entry.value) || 0
@@ -1087,7 +1748,7 @@ const CampaignReportTabs = () => {
         </div>
         <div style="flex: 1; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <div style="text-align: right; margin-bottom: 25px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicHeight}px;">
             ${barChartHtml}
           </div>
         </div>
@@ -1106,6 +1767,8 @@ const CampaignReportTabs = () => {
     };
 
     const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
+    const totalDataSumClicks = validEntries.reduce((sum, e) => sum + (parseInt(e.value) || 0), 0);
+    const barChartHeight = Math.max(80, Math.min(320, validEntries.length * 20 + Math.ceil(totalDataSumClicks / 60)));
     const bars = validEntries.map(entry => ({
       label: formatDateForDisplayFn(entry.date),
       value: parseInt(entry.value) || 0
@@ -1215,7 +1878,7 @@ const CampaignReportTabs = () => {
         </div>
         <div style="flex: 1; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <div style="text-align: right; margin-bottom: 25px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-          <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${barChartHeight}px;">
             ${barChartHtml}
           </div>
         </div>
@@ -1235,7 +1898,8 @@ const CampaignReportTabs = () => {
       }));
 
     const maxValue = Math.max(...locationData.map(d => d.value), 1);
-    const chartHeight = 200;
+    const totalLocationDataSum = locationData.reduce((sum, d) => sum + d.value, 0);
+    const chartHeight = Math.max(80, Math.min(300, locationData.length * 18 + Math.ceil(totalLocationDataSum / 40)));
     const chartWidth = 700;
     const barWidth = Math.min(35, (chartWidth / locationData.length) - 10);
     const startX = 60;
@@ -1271,9 +1935,9 @@ const CampaignReportTabs = () => {
         <div style="flex: 2;">
           <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
             <h4 style="color: #444; margin-bottom: 20px; font-weight: 500; text-align: center;">Audience Location Overview</h4>
-            <div style="position: relative; min-height: 280px;">
+            <div style="position: relative; min-height: ${Math.max(280, (locationData.length * 35) + 80)}px;">
               ${locationData.length > 0 ? `
-                <svg width="100%" height="280" viewBox="0 0 800 280" preserveAspectRatio="xMidYMid meet">
+                <svg width="100%" height="${chartHeight + 60}" viewBox="0 0 800 ${chartHeight + 60}" preserveAspectRatio="xMidYMid meet">
                   <line x1="40" y1="30" x2="40" y2="${chartHeight + 30}" stroke="#ccc" stroke-width="1" />
                   <line x1="40" y1="${chartHeight + 30}" x2="${chartWidth + 50}" y2="${chartHeight + 30}" stroke="#ccc" stroke-width="1" />
                   <text x="30" y="30" text-anchor="end" font-size="10" fill="#999">${maxValue}</text>
@@ -1363,7 +2027,6 @@ const CampaignReportTabs = () => {
     if (data.screenshotImage && data.screenshotImage !== '') {
       screenshotHtml = `
       <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 20px;">
-        <h4 style="color: #444; margin-bottom: 15px; font-weight: 500;">Screenshot Preview</h4>
         <div style="text-align: center; background: #f5f5f5; border-radius: 8px; padding: 20px; min-height: 300px; display: flex; align-items: center; justify-content: center;">
           <img 
             src="${data.screenshotImage}" 
@@ -1377,7 +2040,6 @@ const CampaignReportTabs = () => {
     } else {
       screenshotHtml = `
       <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 20px;">
-        <h4 style="color: #444; margin-bottom: 15px; font-weight: 500;">Screenshot Preview</h4>
         <div style="text-align: center; padding: 60px; color: #999; background: #f5f5f5; border-radius: 8px;">
           No screenshot uploaded
         </div>
@@ -1388,13 +2050,15 @@ const CampaignReportTabs = () => {
     // Speed visualization data
     const speedValues = speedEntries.map(entry => parseFloat(entry.value) || 0);
     const maxSpeed = Math.max(...speedValues, 5);
+    const totalSpeedDataSum = speedValues.reduce((sum, v) => sum + v, 0);
+    const speedChartHeight = Math.max(80, Math.min(300, speedValues.length * 22 + Math.ceil(totalSpeedDataSum / 50)));
 
     let speedBarsHtml = '';
     if (speedValues.length > 0) {
       speedBarsHtml = `
       <div style="margin-top: 30px; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
         <h4 style="color: #444; margin-bottom: 20px; font-weight: 500;">Speed Visualization</h4>
-        <div style="display: flex; align-items: flex-end; gap: 8px; height: 200px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: flex-end; gap: 8px; height: ${speedChartHeight}px; margin-bottom: 20px;">
           ${speedValues.map((value, index) => {
         const heightPercent = (value / maxSpeed) * 100;
         return `
@@ -1484,16 +2148,24 @@ const CampaignReportTabs = () => {
   const getGraphData = () => {
     const validEntries = pacingEntries.filter(entry => entry.date && entry.value);
     if (validEntries.length === 0) {
-      return { points: '', area: '', maxValue: 2500, values: [], validEntries: [] };
+      return { points: '', area: '', maxValue: 2500, values: [], validEntries: [], suggestedHeight: 150 };
     }
 
     const values = validEntries.map(entry => parseFloat(entry.value) || 0);
     const max = Math.max(...values, 2500);
-    const w = 550, h = 150;
+
+    // Dynamic height based on max value (more height for larger values)
+    let suggestedHeight = 150;
+    if (max > 5000) suggestedHeight = 200;
+    if (max > 10000) suggestedHeight = 250;
+    if (max > 20000) suggestedHeight = 300;
+
+    const w = 550;
+    const h = suggestedHeight;
     const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
     const points = values.map((v, i) => `${i * xStep},${h - (v / max * h)}`).join(' ');
     const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / max * h)}`).join(' ');
-    return { points, area: `0,${h} ${areaPoints} ${w},${h}`, maxValue: max, values, validEntries };
+    return { points, area: `0,${h} ${areaPoints} ${w},${h}`, maxValue: max, values, validEntries, suggestedHeight };
   };
 
   const graphData = getGraphData();
@@ -1626,8 +2298,8 @@ const CampaignReportTabs = () => {
     <>
       <Row className="mb-3">
         <Col md={6}><Form.Label>Report Title</Form.Label>
-        <Form.Control name="reportTitle" 
-        value={outboundFormData.reportTitle} onChange={handleOutboundChange} />
+          <Form.Control name="reportTitle"
+            value={outboundFormData.reportTitle} onChange={handleOutboundChange} />
         </Col>
         <Col md={3}>
           <Form.Label>Start Date</Form.Label>
