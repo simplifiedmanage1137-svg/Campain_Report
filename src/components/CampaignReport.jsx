@@ -1,11 +1,13 @@
 // CampaignReport.jsx - Updated to match screenshot exactly
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Container, Row, Col } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const CampaignReport = () => {
+    const navigate = useNavigate();
     const handleNextPage = () => {
-        window.location.href = '/CampaignReportTabs';
+        navigate('/campaign-report-tabs');
     };
 
     return (

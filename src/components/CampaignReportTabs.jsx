@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Form, Button, Card, Table, Alert, Tab, Tabs } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import jsPDF from 'jspdf';
@@ -251,9 +252,10 @@ const CampaignReportTabs = () => {
     ]);
 
   const [screenshotImage, setScreenshotImage] = useState(null);
+  const navigate = useNavigate();
 
   const handleBackToCampaign = () => {
-    window.location.href = '/';
+    navigate('/');
   };
 
   // Validate Outbound Form
