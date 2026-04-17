@@ -100,57 +100,365 @@ const CustomDatePicker = ({ value, onChange, placeholder = "DD/MM/YYYY" }) => {
   );
 };
 
-const CustomNumberInput = ({ value, onChange, placeholder = "Enter value", size = "sm" }) => {
-  const [localValue, setLocalValue] = useState(value || '');
-
-  // Sync localValue when parent value changes
-  useEffect(() => {
-    setLocalValue(value || '');
-  }, [value]);
-
-  const handleChange = (e) => {
-    const newValue = e.target.value;
-    setLocalValue(newValue);           // Live typing
-  };
-
-  const handleBlur = () => {
-    // Only update parent when user finishes typing (on blur)
-    if (onChange) {
-      onChange(localValue);
-    }
-  };
-
-  // Optional: Allow live update on Enter key
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.target.blur();   // Trigger blur
-    }
-  };
-
+const CustomNumberInput = ({ value, onChange, placeholder = "Enter value", size = "sm", disabled = false }) => {
   return (
-    <Form.Control
+    <input
       type="text"
       placeholder={placeholder}
-      value={localValue}
-      onChange={handleChange}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      size={size}
-      style={{ width: '100%' }}
+      defaultValue={value || ''}
+      onBlur={(e) => onChange?.(e.target.value)}
+      disabled={disabled}
+      autoComplete="off"
+      className={`form-control form-control-${size}`}
+      style={{ ...(disabled && { backgroundColor: '#f5f5f5' }) }}
     />
   );
 };
 
-// Speed Visualization Data Input Component
-const SpeedDataInput = ({ value, onChange, placeholder = "Time (s)", size = "sm" }) => {
+const OutboundForm = ({
+  outboundFormData,
+  handleOutboundChange,
+  handleOutboundDateChange,
+  handleOutboundNumberChange,
+  softBounced,
+  setSoftBounced,
+  pacingEntries,
+  handlePacingEntryChange,
+  addPacingEntry,
+  removePacingEntry,
+  jobRoleEntries,
+  handleJobRoleChange,
+  addJobRoleEntry,
+  removeJobRoleEntry,
+  jobScenarioEntries,
+  handleJobScenarioChange,
+  addJobScenarioEntry,
+  removeJobScenarioEntry,
+  handleBackToCampaign,
+  saveOutboundData,
+  outboundValidationError,
+  setOutboundValidationError,
+  outboundRoleError,
+  outboundScenarioError
+}) => {
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  const getRoleTotal = () => {
+    return jobRoleEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
+  };
+
+  const getScenarioTotal = () => {
+    return jobScenarioEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
+  };
+
   return (
-    <Form.Control
-      type="text"
-      placeholder={placeholder}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      size={size}
-    />
+    <>
+      {outboundValidationError && (
+        <Alert variant="danger" className="mb-3" onClose={() => setOutboundValidationError('')} dismissible>
+          {outboundValidationError}
+        </Alert>
+      )}
+
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Label>Report Title</Form.Label>
+          <Form.Control
+            name="reportTitle"
+            value={outboundFormData.reportTitle}
+            onChange={handleOutboundChange}
+            placeholder="Enter report title"
+          />
+        </Col>
+        <Col md={6}>
+          <Form.Label>Subtitle</Form.Label>
+          <Form.Control
+            name="reportSubtitle"
+            value={outboundFormData.reportSubtitle}
+            onChange={handleOutboundChange}
+            placeholder="Enter subtitle"
+          />
+        </Col>
+      </Row>
+
+      <Row className="mb-3">
+        <Col md={3}>
+          <Form.Label>Start Date</Form.Label>
+          <CustomDatePicker
+            value={outboundFormData.startDate}
+            onChange={(value) => handleOutboundDateChange('startDate', value)}
+          />
+        </Col>
+        <Col md={3}>
+          <Form.Label>End Date</Form.Label>
+          <CustomDatePicker
+            value={outboundFormData.endDate}
+            onChange={(value) => handleOutboundDateChange('endDate', value)}
+          />
+        </Col>
+      </Row>
+
+      <Row className="mb-3">
+        <Col md={3}>
+          <Form.Label>Total Emails Sent</Form.Label>
+          <Form.Control
+            type="text"
+            value={outboundFormData.totalEmailsSent}
+            disabled
+            style={{ backgroundColor: '#f5f5f5' }}
+            placeholder="Auto-calculated from table"
+          />
+        </Col>
+        <Col md={3}>
+          <Form.Label>Total Delivered</Form.Label>
+          <Form.Control
+            type="text"
+            value={outboundFormData.totalEmailsDelivered}
+            disabled
+            style={{ backgroundColor: '#f5f5f5' }}
+            placeholder="Auto-calculated"
+          />
+        </Col>
+        <Col md={3}>
+          <Form.Label>Avg Sends</Form.Label>
+          <Form.Control
+            type="text"
+            value={outboundFormData.dailyAvgSends}
+            disabled
+            style={{ backgroundColor: '#f5f5f5' }}
+            placeholder="Auto-calculated from table"
+          />
+        </Col>
+        <Col md={3}>
+          <Form.Label>Hard Bounced</Form.Label>
+          <CustomNumberInput
+            value={outboundFormData.totalHardBounced}
+            onChange={(value) => handleOutboundNumberChange('totalHardBounced', value)}
+            placeholder="Manual entry"
+          />
+        </Col>
+      </Row>
+
+      <Row className="mb-3">
+        <Col md={3}>
+          <Form.Label>Soft Bounced</Form.Label>
+          <CustomNumberInput
+            value={softBounced}
+            onChange={(value) => setSoftBounced(value)}
+            placeholder="Manual entry (Not in PDF)"
+          />
+        </Col>
+        <Col md={3}>
+          <Form.Label>Bounce Rate %</Form.Label>
+          <Form.Control
+            type="text"
+            value={outboundFormData.bounceRate}
+            disabled
+            style={{ backgroundColor: '#f5f5f5' }}
+            placeholder="Auto-calculated"
+          />
+        </Col>
+      </Row>
+
+      {/* Table 1: Daily Pacing Dynamic Data */}
+      <Form.Group className="mb-4">
+        <Form.Label className="fw-bold">1. Daily Pacing Dynamic Data</Form.Label>
+        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+          <Table responsive bordered size="sm">
+            <thead>
+              <tr>
+                <th style={{ width: '45%' }}>Date (Editable)</th>
+                <th style={{ width: '45%' }}>Value (Emails Sent) - Editable</th>
+                <th style={{ width: '10%' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pacingEntries.map((entry) => (
+                <tr key={entry.id}>
+                  <td style={{ width: '45%' }}>
+                    <CustomDatePicker
+                      value={entry.date}
+                      onChange={(value) => handlePacingEntryChange(entry.id, 'date', value)}
+                    />
+                  </td>
+                  <td style={{ width: '45%' }}>
+                    <CustomNumberInput
+                      value={entry.value}
+                      onChange={(value) => handlePacingEntryChange(entry.id, 'value', value)}
+                      placeholder="Enter value"
+                    />
+                  </td>
+                  <td className="text-center" style={{ width: '10%' }}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => removePacingEntry(entry.id)}
+                      disabled={pacingEntries.length === 1}
+                    >
+                      ×
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+        <Button
+          variant="outline-primary"
+          size="sm"
+          onClick={addPacingEntry}
+          className="mt-2"
+          style={{ width: '100%' }}
+        >
+          + Add New Entry
+        </Button>
+      </Form.Group>
+
+      {/* Table 2: Job Role Distribution */}
+      <Form.Group className="mb-4">
+        <Form.Label className="fw-bold">2. Job Role Distribution</Form.Label>
+        {outboundRoleError && (
+          <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+            {outboundRoleError}
+          </Alert>
+        )}
+        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+          <Table responsive bordered size="sm">
+            <thead>
+              <tr>
+                <th style={{ width: '45%' }}>Role Name</th>
+                <th style={{ width: '45%' }}>Value (%)</th>
+                <th style={{ width: '10%' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobRoleEntries.map((entry) => (
+                <tr key={entry.id}>
+                  <td style={{ width: '45%' }}>
+                    <Form.Control
+                      type="text"
+                      value={entry.role}
+                      onChange={(e) => handleJobRoleChange(entry.id, 'role', e.target.value)}
+                      placeholder="Enter role name"
+                      size="sm"
+                    />
+                  </td>
+                  <td style={{ width: '45%' }}>
+                    <CustomNumberInput
+                      value={entry.value}
+                      onChange={(value) => handleJobRoleChange(entry.id, 'value', value)}
+                      placeholder="Enter percentage"
+                    />
+                  </td>
+                  <td className="text-center" style={{ width: '10%' }}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => removeJobRoleEntry(entry.id)}
+                      disabled={jobRoleEntries.length === 1}
+                    >
+                      ×
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+        <small className="text-muted mt-2 d-block">
+          Total: {getRoleTotal()}%
+          {getRoleTotal() > 100 &&
+            <span className="text-danger"> (Exceeds 100%!)</span>
+          }
+        </small>
+        <Button
+          variant="outline-primary"
+          size="sm"
+          onClick={addJobRoleEntry}
+          className="mt-2"
+          style={{ width: '100%' }}
+        >
+          + Add New Entry
+        </Button>
+      </Form.Group>
+
+      {/* Table 3: Job Scenario Distribution */}
+      <Form.Group className="mb-4">
+        <Form.Label className="fw-bold">3. Job Scenario Distribution</Form.Label>
+        {outboundScenarioError && (
+          <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+            {outboundScenarioError}
+          </Alert>
+        )}
+        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+          <Table responsive bordered size="sm">
+            <thead>
+              <tr>
+                <th style={{ width: '45%' }}>Scenario Name</th>
+                <th style={{ width: '45%' }}>Value (%)</th>
+                <th style={{ width: '10%' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobScenarioEntries.map((entry) => (
+                <tr key={entry.id}>
+                  <td style={{ width: '45%' }}>
+                    <Form.Control
+                      type="text"
+                      value={entry.scenario}
+                      onChange={(e) => handleJobScenarioChange(entry.id, 'scenario', e.target.value)}
+                      placeholder="Enter scenario name"
+                      size="sm"
+                    />
+                  </td>
+                  <td style={{ width: '45%' }}>
+                    <CustomNumberInput
+                      value={entry.value}
+                      onChange={(value) => handleJobScenarioChange(entry.id, 'value', value)}
+                      placeholder="Enter percentage"
+                    />
+                  </td>
+                  <td className="text-center" style={{ width: '10%' }}>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => removeJobScenarioEntry(entry.id)}
+                      disabled={jobScenarioEntries.length === 1}
+                    >
+                      ×
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </div>
+        <small className="text-muted mt-2 d-block">
+          Total: {getScenarioTotal()}%
+          {getScenarioTotal() > 100 &&
+            <span className="text-danger"> (Exceeds 100%!)</span>
+          }
+        </small>
+        <Button
+          variant="outline-primary"
+          size="sm"
+          onClick={addJobScenarioEntry}
+          className="mt-2"
+          style={{ width: '100%' }}
+        >
+          + Add New Entry
+        </Button>
+      </Form.Group>
+
+      <div className="d-flex gap-3">
+        <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={handleBackToCampaign}>Back to Campaign</Button>
+        <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={saveOutboundData}>💾 Save & Next</Button>
+      </div>
+    </>
   );
 };
 
@@ -176,10 +484,35 @@ const CampaignReportTabs = () => {
   const [pocClicksValidationMessage, setPocClicksValidationMessage] = useState('');
   const [landingPageValidationMessage, setLandingPageValidationMessage] = useState('');
   const [webVitalsValidationMessage, setWebVitalsValidationMessage] = useState('');
+  const [currentDate, setCurrentDate] = useState('');
+
+  // Validation error states for cross-tab validation
+  const [outboundValidationError, setOutboundValidationError] = useState('');
+  const [opensValidationError, setOpensValidationError] = useState('');
+  const [clicksValidationError, setClicksValidationError] = useState('');
+
+  // Per-row validation error states
+  const [opensValidationErrors, setOpensValidationErrors] = useState({});
+  const [clicksValidationErrors, setClicksValidationErrors] = useState({});
+  const [opensToOutboundError, setOpensToOutboundError] = useState({});
+  const [clicksToOpensError, setClicksToOpensError] = useState({});
+  const [hasOpensValidationError, setHasOpensValidationError] = useState(false);
+  const [hasClicksValidationError, setHasClicksValidationError] = useState(false);
+
+  // Job Role Distribution validation errors
+  const [outboundRoleError, setOutboundRoleError] = useState('');
+  const [opensRoleError, setOpensRoleError] = useState('');
+  const [clicksRoleError, setClicksRoleError] = useState('');
+
+  // Job Scenario Distribution validation errors
+  const [outboundScenarioError, setOutboundScenarioError] = useState('');
+  const [opensScenarioError, setOpensScenarioError] = useState('');
+  const [clicksScenarioError, setClicksScenarioError] = useState('');
 
   // Outbound Form State
   const [outboundFormData, setOutboundFormData] = useState({
     reportTitle: '',
+    reportSubtitle: '',
     startDate: '',
     endDate: '',
     totalEmailsSent: '',
@@ -197,6 +530,173 @@ const CampaignReportTabs = () => {
   const [pacingEntries, setPacingEntries] = useState([
     { id: Date.now(), date: '', value: '' }
   ]);
+
+  // Separate Job Role entries for each tab
+  const [outboundJobRoleEntries, setOutboundJobRoleEntries] = useState([
+    { id: Date.now(), role: '', value: '' }
+  ]);
+  const [opensJobRoleEntries, setOpensJobRoleEntries] = useState([]);
+  const [clicksJobRoleEntries, setClicksJobRoleEntries] = useState([]);
+
+  // Separate Job Scenario entries for each tab
+  const [outboundJobScenarioEntries, setOutboundJobScenarioEntries] = useState([
+    { id: Date.now(), scenario: '', value: '' }
+  ]);
+  const [opensJobScenarioEntries, setOpensJobScenarioEntries] = useState([]);
+  const [clicksJobScenarioEntries, setClicksJobScenarioEntries] = useState([]);
+
+  useEffect(() => {
+    const today = new Date();
+    const formattedDate = `${today.getDate().toString().padStart(2, '0')}/${(today.getMonth() + 1).toString().padStart(2, '0')}/${today.getFullYear()}`;
+    setCurrentDate(formattedDate);
+  }, []);
+
+  // Sync Role Names and Scenario Names from Outbound to Opens and Clicks tabs
+  useEffect(() => {
+    if (outboundJobRoleEntries.length > 0) {
+      setOpensJobRoleEntries(prev => {
+        const newEntries = outboundJobRoleEntries.map(outboundEntry => {
+          const existingEntry = prev.find(e => e.id === outboundEntry.id);
+          return {
+            id: outboundEntry.id,
+            role: outboundEntry.role,
+            value: existingEntry ? existingEntry.value : outboundEntry.value
+          };
+        });
+        return newEntries;
+      });
+
+      setClicksJobRoleEntries(prev => {
+        const newEntries = outboundJobRoleEntries.map(outboundEntry => {
+          const existingEntry = prev.find(e => e.id === outboundEntry.id);
+          return {
+            id: outboundEntry.id,
+            role: outboundEntry.role,
+            value: existingEntry ? existingEntry.value : outboundEntry.value
+          };
+        });
+        return newEntries;
+      });
+    }
+  }, [outboundJobRoleEntries]);
+
+  useEffect(() => {
+    if (outboundJobScenarioEntries.length > 0) {
+      setOpensJobScenarioEntries(prev => {
+        const newEntries = outboundJobScenarioEntries.map(outboundEntry => {
+          const existingEntry = prev.find(e => e.id === outboundEntry.id);
+          return {
+            id: outboundEntry.id,
+            scenario: outboundEntry.scenario,
+            value: existingEntry ? existingEntry.value : outboundEntry.value
+          };
+        });
+        return newEntries;
+      });
+
+      setClicksJobScenarioEntries(prev => {
+        const newEntries = outboundJobScenarioEntries.map(outboundEntry => {
+          const existingEntry = prev.find(e => e.id === outboundEntry.id);
+          return {
+            id: outboundEntry.id,
+            scenario: outboundEntry.scenario,
+            value: existingEntry ? existingEntry.value : outboundEntry.value
+          };
+        });
+        return newEntries;
+      });
+    }
+  }, [outboundJobScenarioEntries]);
+
+  // Validate Job Role Distribution total percentage
+  const validateJobRoleTotal = useCallback((entries, setErrorCallback) => {
+    const total = entries.reduce((sum, entry) => {
+      const value = parseFloat(entry.value) || 0;
+      return sum + value;
+    }, 0);
+
+    if (total > 100) {
+      setErrorCallback(`⚠️ Total percentage cannot exceed 100%. Current total: ${total}%`);
+      return false;
+    } else {
+      setErrorCallback('');
+      return true;
+    }
+  }, []);
+
+  // Validate Job Scenario Distribution total percentage
+  const validateJobScenarioTotal = useCallback((entries, setErrorCallback) => {
+    const total = entries.reduce((sum, entry) => {
+      const value = parseFloat(entry.value) || 0;
+      return sum + value;
+    }, 0);
+
+    if (total > 100) {
+      setErrorCallback(`⚠️ Total percentage cannot exceed 100%. Current total: ${total}%`);
+      return false;
+    } else {
+      setErrorCallback('');
+      return true;
+    }
+  }, []);
+
+  // Validate Outbound Job Role Distribution
+  useEffect(() => {
+    validateJobRoleTotal(outboundJobRoleEntries, setOutboundRoleError);
+  }, [outboundJobRoleEntries, validateJobRoleTotal]);
+
+  // Validate Outbound Job Scenario Distribution
+  useEffect(() => {
+    validateJobScenarioTotal(outboundJobScenarioEntries, setOutboundScenarioError);
+  }, [outboundJobScenarioEntries, validateJobScenarioTotal]);
+
+  // Validate Opens Job Role Distribution
+  useEffect(() => {
+    validateJobRoleTotal(opensJobRoleEntries, setOpensRoleError);
+  }, [opensJobRoleEntries, validateJobRoleTotal]);
+
+  // Validate Opens Job Scenario Distribution
+  useEffect(() => {
+    validateJobScenarioTotal(opensJobScenarioEntries, setOpensScenarioError);
+  }, [opensJobScenarioEntries, validateJobScenarioTotal]);
+
+  // Validate Clicks Job Role Distribution
+  useEffect(() => {
+    validateJobRoleTotal(clicksJobRoleEntries, setClicksRoleError);
+  }, [clicksJobRoleEntries, validateJobRoleTotal]);
+
+  // Validate Clicks Job Scenario Distribution
+  useEffect(() => {
+    validateJobScenarioTotal(clicksJobScenarioEntries, setClicksScenarioError);
+  }, [clicksJobScenarioEntries, validateJobScenarioTotal]);
+
+  const calculateDerivedValues = useCallback((entries) => {
+    const validValues = entries
+      .map(entry => parseFloat(entry.value))
+      .filter(val => !isNaN(val) && val !== '');
+    const countWithValues = validValues.length;
+    let totalSum = 0;
+    if (validValues.length > 0) {
+      totalSum = validValues.reduce((sum, val) => sum + val, 0);
+    }
+    const calculatedTotalSent = totalSum;
+    const calculatedAvgSends = countWithValues > 0 ? (totalSum / countWithValues).toFixed(2) : 0;
+    return {
+      totalEmailsSent: calculatedTotalSent.toString(),
+      dailyAvgSends: calculatedAvgSends.toString()
+    };
+  }, []);
+
+  useEffect(() => {
+    const { totalEmailsSent, dailyAvgSends } = calculateDerivedValues(pacingEntries);
+    setOutboundFormData(prev => ({
+      ...prev,
+      totalEmailsSent: totalEmailsSent,
+      dailyAvgSends: dailyAvgSends
+    }));
+    setIsOutboundSaved(false);
+    setOutboundValidationMessage('');
+  }, [pacingEntries, calculateDerivedValues]);
 
   // PoC Opens Form State
   const [pocOpensFormData, setPocOpensFormData] = useState({
@@ -235,6 +735,7 @@ const CampaignReportTabs = () => {
   // Landing Page Form State
   const [landingPageFormData, setLandingPageFormData] = useState({
     reportTitle: '',
+    reportSubtitle: '',
     totalUsers: '',
     avgSession: '',
     bouncedUsers: '',
@@ -249,6 +750,7 @@ const CampaignReportTabs = () => {
   // Web Page Vitals Form State
   const [webVitalsFormData, setWebVitalsFormData] = useState({
     reportTitle: '',
+    reportSubtitle: '',
     avgPageLoadSpeed: '',
     structureMetrix: '',
     largestElementLCP: '',
@@ -270,11 +772,110 @@ const CampaignReportTabs = () => {
   const [screenshotImage, setScreenshotImage] = useState(null);
   const navigate = useNavigate();
 
+  const [softBounced, setSoftBounced] = useState('');
+
+  const calculateTotalDelivered = useCallback(() => {
+    const totalEmailsSent = parseFloat(outboundFormData.totalEmailsSent) || 0;
+    const hardBounces = parseFloat(outboundFormData.totalHardBounced) || 0;
+    const softBounces = parseFloat(softBounced) || 0;
+    const totalDelivered = totalEmailsSent - hardBounces - softBounces;
+    return totalDelivered >= 0 ? totalDelivered.toString() : '0';
+  }, [outboundFormData.totalEmailsSent, outboundFormData.totalHardBounced, softBounced]);
+
+  const calculateBounceRate = useCallback(() => {
+    const totalEmailsSent = parseFloat(outboundFormData.totalEmailsSent) || 0;
+    const hardBounces = parseFloat(outboundFormData.totalHardBounced) || 0;
+    const softBounces = parseFloat(softBounced) || 0;
+    if (totalEmailsSent > 0) {
+      const bounceRate = ((hardBounces + softBounces) / totalEmailsSent) * 100;
+      return bounceRate.toFixed(2);
+    }
+    return '0';
+  }, [outboundFormData.totalEmailsSent, outboundFormData.totalHardBounced, softBounced]);
+
+  useEffect(() => {
+    const calculatedTotalDelivered = calculateTotalDelivered();
+    const calculatedBounceRate = calculateBounceRate();
+    setOutboundFormData(prev => ({
+      ...prev,
+      totalEmailsDelivered: calculatedTotalDelivered,
+      bounceRate: calculatedBounceRate
+    }));
+  }, [calculateTotalDelivered, calculateBounceRate]);
+
+  // Sync from Outbound to Opens
+  useEffect(() => {
+    if (pacingEntries.length > 0) {
+      const syncedBarEntries = pacingEntries.map(entry => ({
+        id: entry.id,
+        date: entry.date,
+        value: entry.value
+      }));
+      setOpensBarEntries(syncedBarEntries);
+    }
+  }, [pacingEntries]);
+
+  // Sync from Opens to Clicks
+  useEffect(() => {
+    if (opensBarEntries.length > 0) {
+      const syncedBarEntries = opensBarEntries.map(entry => ({
+        id: entry.id,
+        date: entry.date,
+        value: entry.value
+      }));
+      setClicksBarEntries(syncedBarEntries);
+    }
+  }, [opensBarEntries]);
+
+  useEffect(() => {
+    if (outboundFormData.reportTitle) {
+      setPocOpensFormData(prev => ({ ...prev, reportTitle: outboundFormData.reportTitle }));
+      setPocClicksFormData(prev => ({ ...prev, reportTitle: outboundFormData.reportTitle }));
+      setLandingPageFormData(prev => ({ ...prev, reportTitle: outboundFormData.reportTitle }));
+      setWebVitalsFormData(prev => ({ ...prev, reportTitle: outboundFormData.reportTitle }));
+    }
+  }, [outboundFormData.reportTitle]);
+
+  useEffect(() => {
+    if (outboundFormData.startDate && outboundFormData.endDate) {
+      const formatDateForSubtitle = (date) => {
+        if (!date) return '';
+        const d = new Date(date);
+        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+      };
+      const subtitle = `${formatDateForSubtitle(outboundFormData.startDate)} - ${formatDateForSubtitle(outboundFormData.endDate)}`;
+      setPocOpensFormData(prev => prev.reportSubtitle ? prev : ({ ...prev, reportSubtitle: subtitle }));
+      setPocClicksFormData(prev => prev.reportSubtitle ? prev : ({ ...prev, reportSubtitle: subtitle }));
+    }
+  }, [outboundFormData.startDate, outboundFormData.endDate]);
+
+  useEffect(() => {
+    const totalUsers = parseFloat(landingPageFormData.totalUsers) || 0;
+    const bouncedUsers = parseFloat(landingPageFormData.bouncedUsers) || 0;
+
+    let calculatedBounceRate = '';
+    if (totalUsers > 0 && bouncedUsers > 0) {
+      const bounceRate = (bouncedUsers / totalUsers) * 100;
+      calculatedBounceRate = bounceRate.toFixed(2);
+    } else if (totalUsers > 0 && bouncedUsers === 0) {
+      calculatedBounceRate = '0';
+    } else {
+      calculatedBounceRate = '';
+    }
+
+    if (calculatedBounceRate !== landingPageFormData.bounceRate) {
+      setLandingPageFormData(prev => ({
+        ...prev,
+        bounceRate: calculatedBounceRate
+      }));
+    }
+  }, [landingPageFormData.totalUsers, landingPageFormData.bouncedUsers]);
+
+
   const handleBackToCampaign = () => {
     navigate('/');
   };
 
-  // Validate Outbound Form
   const validateOutboundForm = () => {
     if (!outboundFormData.reportTitle) {
       setOutboundValidationMessage('Please enter Report Title');
@@ -288,76 +889,33 @@ const CampaignReportTabs = () => {
       setOutboundValidationMessage('Please select End Date');
       return false;
     }
-    if (!outboundFormData.totalEmailsSent) {
-      setOutboundValidationMessage('Please enter Total Emails Sent');
-      return false;
-    }
-    if (!outboundFormData.totalEmailsDelivered) {
-      setOutboundValidationMessage('Please enter Total Emails Delivered');
-      return false;
-    }
-    if (!outboundFormData.dailyAvgSends) {
-      setOutboundValidationMessage('Please enter Daily Average Sends');
-      return false;
-    }
-    if (!outboundFormData.totalHardBounced) {
-      setOutboundValidationMessage('Please enter Total Hard Bounced');
-      return false;
-    }
-
-    const hasValidPacing = pacingEntries.some(entry => entry.date && entry.value);
+    const hasValidPacing = pacingEntries.some(entry => entry.date && entry.value && !isNaN(parseFloat(entry.value)));
     if (!hasValidPacing) {
-      setOutboundValidationMessage('Please add at least one entry in Daily Pacing Dynamic Data');
+      setOutboundValidationMessage('Please add at least one valid entry in Daily Pacing Dynamic Data');
       return false;
     }
-
     setOutboundValidationMessage('');
     return true;
   };
 
-  // Validate PoC Opens Form
   const validatePocOpensForm = () => {
     if (!pocOpensFormData.reportTitle) {
       setPocOpensValidationMessage('Please enter Report Title');
       return false;
     }
-    if (!pocOpensFormData.totalECsOpened) {
-      setPocOpensValidationMessage('Please enter Total ECs Opened');
-      return false;
-    }
-
-    const hasValidBar = opensBarEntries.some(entry => entry.date && entry.value);
-    if (!hasValidBar) {
-      setPocOpensValidationMessage('Please add at least one entry in Bar Chart Values');
-      return false;
-    }
-
     setPocOpensValidationMessage('');
     return true;
   };
 
-  // Validate PoC Clicks Form
   const validatePocClicksForm = () => {
     if (!pocClicksFormData.reportTitle) {
       setPocClicksValidationMessage('Please enter Report Title');
       return false;
     }
-    if (!pocClicksFormData.totalECsClicked) {
-      setPocClicksValidationMessage('Please enter Total ECs Clicked');
-      return false;
-    }
-
-    const hasValidBar = clicksBarEntries.some(entry => entry.date && entry.value);
-    if (!hasValidBar) {
-      setPocClicksValidationMessage('Please add at least one entry in Bar Chart Values');
-      return false;
-    }
-
     setPocClicksValidationMessage('');
     return true;
   };
 
-  // Validate Landing Page Form
   const validateLandingPageForm = () => {
     if (!landingPageFormData.reportTitle) {
       setLandingPageValidationMessage('Please enter Report Title');
@@ -371,18 +929,15 @@ const CampaignReportTabs = () => {
       setLandingPageValidationMessage('Please enter Bounced Users');
       return false;
     }
-
     const hasValidState = stateEntries.some(entry => entry.state && entry.value);
     if (!hasValidState) {
       setLandingPageValidationMessage('Please add at least one entry in Audience Location Overview');
       return false;
     }
-
     setLandingPageValidationMessage('');
     return true;
   };
 
-  // Validate Web Vitals Form
   const validateWebVitalsForm = () => {
     if (!webVitalsFormData.reportTitle) {
       setWebVitalsValidationMessage('Please enter Report Title');
@@ -404,20 +959,24 @@ const CampaignReportTabs = () => {
       setWebVitalsValidationMessage('Please enter TBT Script Blocks');
       return false;
     }
-
     setWebVitalsValidationMessage('');
     return true;
   };
 
-  // Outbound Functions
   const handleOutboundChange = useCallback((e) => {
     const { name, value } = e.target;
+    if (name === 'totalEmailsSent' || name === 'dailyAvgSends' || name === 'totalHardBounced' || name === 'totalEmailsDelivered' || name === 'bounceRate') {
+      return;
+    }
     setOutboundFormData(prev => ({ ...prev, [name]: value }));
     setIsOutboundSaved(false);
     setOutboundValidationMessage('');
   }, []);
 
   const handleOutboundNumberChange = useCallback((name, value) => {
+    if (name === 'totalEmailsSent' || name === 'dailyAvgSends' || name === 'totalEmailsDelivered' || name === 'bounceRate') {
+      return;
+    }
     setOutboundFormData(prev => ({ ...prev, [name]: value }));
     setIsOutboundSaved(false);
     setOutboundValidationMessage('');
@@ -429,7 +988,41 @@ const CampaignReportTabs = () => {
     setOutboundValidationMessage('');
   }, []);
 
+  const formatDateForDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '';
+    return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  // Updated handlePacingEntryChange with cross-tab validation
   const handlePacingEntryChange = useCallback((id, field, value) => {
+    if (field === 'value') {
+      const entry = pacingEntries.find(e => e.id === id);
+      if (entry && entry.date) {
+        const newValueNum = parseFloat(value) || 0;
+
+        const opensEntry = opensBarEntries.find(e => e.date === entry.date);
+        if (opensEntry && opensEntry.value) {
+          const opensValue = parseFloat(opensEntry.value) || 0;
+          if (newValueNum > opensValue) {
+            setOutboundValidationError(`Error: Cannot set value ${newValueNum} for date ${formatDateForDisplay(entry.date)} because it exceeds the Opens value (${opensValue}).`);
+            return;
+          }
+        }
+
+        const clicksEntry = clicksBarEntries.find(e => e.date === entry.date);
+        if (clicksEntry && clicksEntry.value) {
+          const clicksValue = parseFloat(clicksEntry.value) || 0;
+          if (newValueNum > clicksValue) {
+            setOutboundValidationError(`Error: Cannot set value ${newValueNum} for date ${formatDateForDisplay(entry.date)} because it exceeds the Clicks value (${clicksValue}).`);
+            return;
+          }
+        }
+      }
+    }
+
+    setOutboundValidationError('');
     setPacingEntries(prev => {
       return prev.map(entry => {
         if (entry.id === id) {
@@ -438,30 +1031,36 @@ const CampaignReportTabs = () => {
         return entry;
       });
     });
-    setIsOutboundSaved(false);
-    setOutboundValidationMessage('');
-  }, []);
+  }, [pacingEntries, opensBarEntries, clicksBarEntries]);
 
   const addPacingEntry = () => {
     setPacingEntries(prev => [...prev, { id: Date.now(), date: '', value: '' }]);
-    setIsOutboundSaved(false);
   };
 
   const removePacingEntry = (id) => {
     if (pacingEntries.length > 1) {
       setPacingEntries(prev => prev.filter(entry => entry.id !== id));
-      setIsOutboundSaved(false);
     }
   };
 
   const saveOutboundData = () => {
+    if (outboundRoleError) {
+      setOutboundValidationMessage(outboundRoleError);
+      return;
+    }
+    if (outboundScenarioError) {
+      setOutboundValidationMessage(outboundScenarioError);
+      return;
+    }
     if (!validateOutboundForm()) {
       return;
     }
-
     const dataToSave = {
       formData: outboundFormData,
       pacingEntries,
+      jobRoleEntries: outboundJobRoleEntries,
+      jobScenarioEntries: outboundJobScenarioEntries,
+      softBounced,
       savedAt: new Date().toISOString()
     };
     setOutboundData(dataToSave);
@@ -471,7 +1070,6 @@ const CampaignReportTabs = () => {
     setActiveTab('poc-opens');
   };
 
-  // PoC Opens Functions
   const handlePocOpensChange = useCallback((e) => {
     const { name, value } = e.target;
     setPocOpensFormData(prev => ({ ...prev, [name]: value }));
@@ -485,49 +1083,6 @@ const CampaignReportTabs = () => {
     setPocOpensValidationMessage('');
   }, []);
 
-  const handleOpensBarEntryChange = useCallback((id, field, value) => {
-    setOpensBarEntries(prev => {
-      return prev.map(entry => {
-        if (entry.id === id) {
-          return { ...entry, [field]: value };
-        }
-        return entry;
-      });
-    });
-    setIsPocOpensSaved(false);
-    setPocOpensValidationMessage('');
-  }, []);
-
-  const addOpensBarEntry = () => {
-    setOpensBarEntries(prev => [...prev, { id: Date.now(), date: '', value: '' }]);
-    setIsPocOpensSaved(false);
-  };
-
-  const removeOpensBarEntry = (id) => {
-    if (opensBarEntries.length > 1) {
-      setOpensBarEntries(prev => prev.filter(entry => entry.id !== id));
-      setIsPocOpensSaved(false);
-    }
-  };
-
-  const savePocOpensData = () => {
-    if (!validatePocOpensForm()) {
-      return;
-    }
-
-    const dataToSave = {
-      formData: pocOpensFormData,
-      barEntries: opensBarEntries,
-      savedAt: new Date().toISOString()
-    };
-    setPocOpensData(dataToSave);
-    setIsPocOpensSaved(true);
-    setPocOpensSaveMessage('PoC Opens data saved successfully!');
-    setTimeout(() => setPocOpensSaveMessage(''), 3000);
-    setActiveTab('poc-clicks');
-  };
-
-  // PoC Clicks Functions
   const handlePocClicksChange = useCallback((e) => {
     const { name, value } = e.target;
     setPocClicksFormData(prev => ({ ...prev, [name]: value }));
@@ -541,49 +1096,6 @@ const CampaignReportTabs = () => {
     setPocClicksValidationMessage('');
   }, []);
 
-  const handleClicksBarEntryChange = useCallback((id, field, value) => {
-    setClicksBarEntries(prev => {
-      return prev.map(entry => {
-        if (entry.id === id) {
-          return { ...entry, [field]: value };
-        }
-        return entry;
-      });
-    });
-    setIsPocClicksSaved(false);
-    setPocClicksValidationMessage('');
-  }, []);
-
-  const addClicksBarEntry = () => {
-    setClicksBarEntries(prev => [...prev, { id: Date.now(), date: '', value: '' }]);
-    setIsPocClicksSaved(false);
-  };
-
-  const removeClicksBarEntry = (id) => {
-    if (clicksBarEntries.length > 1) {
-      setClicksBarEntries(prev => prev.filter(entry => entry.id !== id));
-      setIsPocClicksSaved(false);
-    }
-  };
-
-  const savePocClicksData = () => {
-    if (!validatePocClicksForm()) {
-      return;
-    }
-
-    const dataToSave = {
-      formData: pocClicksFormData,
-      barEntries: clicksBarEntries,
-      savedAt: new Date().toISOString()
-    };
-    setPocClicksData(dataToSave);
-    setIsPocClicksSaved(true);
-    setPocClicksSaveMessage('PoC Clicks data saved successfully!');
-    setTimeout(() => setPocClicksSaveMessage(''), 3000);
-    setActiveTab('landing-page');
-  };
-
-  // Landing Page Functions
   const handleLandingPageChange = useCallback((e) => {
     const { name, value } = e.target;
     setLandingPageFormData(prev => ({ ...prev, [name]: value }));
@@ -626,7 +1138,6 @@ const CampaignReportTabs = () => {
     if (!validateLandingPageForm()) {
       return;
     }
-
     const dataToSave = {
       formData: landingPageFormData,
       stateEntries,
@@ -639,7 +1150,6 @@ const CampaignReportTabs = () => {
     setActiveTab('web-vitals');
   };
 
-  // Web Vitals Functions
   const handleWebVitalsChange = useCallback((e) => {
     const { name, value } = e.target;
     setWebVitalsFormData(prev => ({ ...prev, [name]: value }));
@@ -681,12 +1191,10 @@ const CampaignReportTabs = () => {
   const handleScreenshotUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (optional - limit to 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setWebVitalsValidationMessage('Image size should be less than 5MB');
         return;
       }
-
       const reader = new FileReader();
       reader.onload = (event) => {
         setScreenshotImage(event.target.result);
@@ -704,8 +1212,6 @@ const CampaignReportTabs = () => {
     if (!validateWebVitalsForm()) {
       return;
     }
-
-    // Ensure screenshot is properly stored
     const dataToSave = {
       formData: { ...webVitalsFormData },
       screenshotImage: screenshotImage || null,
@@ -717,2131 +1223,940 @@ const CampaignReportTabs = () => {
     setTimeout(() => setWebVitalsSaveMessage(''), 3000);
   };
 
-  const generateCompletePDF = async () => {
-    if (!isOutboundSaved || !isPocOpensSaved || !isPocClicksSaved || !isLandingPageSaved || !isWebVitalsSaved) {
-      alert('Please save all data (Outbound, PoC Opens, PoC Clicks, Landing Page, and Web Page Vitals) before generating PDF!');
-      return;
-    }
+  // Updated handleOpensBarEntryChange with Outbound validation
+  const handleOpensBarEntryChange = useCallback((id, field, value) => {
+    if (field === 'value') {
+      const entry = opensBarEntries.find(e => e.id === id);
+      if (entry && entry.date) {
+        const newValueNum = parseFloat(value) || 0;
 
-    // Check if all data is available
-    if (!outboundData || !pocOpensData || !pocClicksData || !landingPageData || !webVitalsData) {
-      alert('Some data is missing. Please ensure all sections have been saved.');
-      return;
-    }
-
-    // Create PDF with proper dimensions (A4 Landscape)
-    const pdf = new jsPDF({
-      orientation: 'landscape',
-      unit: 'mm',
-      format: 'a4'
-    });
-
-    try {
-      // Helper function to add page with proper scaling and no extra spacing
-      const addPageToPDF = async (elementCreator, pdfDoc, isFirstPage = false) => {
-        const element = elementCreator();
-        document.body.appendChild(element);
-
-        // Get element dimensions
-        const actualWidth = element.offsetWidth;
-        const actualHeight = element.offsetHeight;
-
-        // A4 Landscape dimensions in mm
-        const pdfWidth = 297;
-        const pdfHeight = 210;
-
-        // Calculate scale to fit width exactly
-        const scale = pdfWidth / (actualWidth / 3.78);
-        const scaledHeight = (actualHeight / 3.78) * scale;
-
-        const canvas = await html2canvas(element, {
-          scale: 3,
-          useCORS: true,
-          logging: false,
-          allowTaint: false,
-          backgroundColor: '#fdfbf2',
-          windowWidth: actualWidth,
-          windowHeight: actualHeight
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-
-        // For first page, add image from top
-        if (isFirstPage) {
-          pdfDoc.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
-        } else {
-          // For subsequent pages, center vertically but remove bottom spacing
-          const yOffset = Math.max(0, (pdfHeight - scaledHeight) / 2);
-          pdfDoc.addImage(imgData, 'PNG', 0, yOffset, pdfWidth, scaledHeight);
+        const outboundEntry = pacingEntries.find(e => e.date === entry.date);
+        if (outboundEntry && outboundEntry.value) {
+          const outboundValue = parseFloat(outboundEntry.value) || 0;
+          if (newValueNum > outboundValue) {
+            setOpensToOutboundError(prev => ({
+              ...prev,
+              [id]: `❌ Cannot set value ${newValueNum} for ${formatDateForDisplay(entry.date)} because it exceeds Outbound value (${outboundValue}).`
+            }));
+            setHasOpensValidationError(true);
+            return;
+          }
         }
-
-        document.body.removeChild(element);
-      };
-
-      // Campaign Page (First page)
-      await addPageToPDF(createCampaignPage, pdf, true);
-
-      // Outbound Page
-      pdf.addPage();
-      await addPageToPDF(() => createOutboundPageWithDynamicHeight(), pdf, false);
-
-      // PoC Opens Page
-      pdf.addPage();
-      await addPageToPDF(() => createPocOpensPageWithNoSpacing(), pdf, false);
-
-      // PoC Clicks Page
-      pdf.addPage();
-      await addPageToPDF(() => createPocClicksPageWithNoSpacing(), pdf, false);
-
-      // Landing Page
-      pdf.addPage();
-      await addPageToPDF(() => createLandingPageWithNoSpacing(), pdf, false);
-
-      // Web Vitals Page
-      pdf.addPage();
-      await addPageToPDF(createWebVitalsPage, pdf, false);
-
-      // Save the PDF
-      pdf.save('Complete_Campaign_Report.pdf');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      alert('An error occurred while generating the PDF. Please try again.');
-    }
-  };
-
-  const createCampaignPage = () => {
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-    div.style.display = 'flex';
-    div.style.flexDirection = 'column';
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 80px;">
-      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">Campaign Performance Report</h1>
-    </div>
-    
-    <div style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-      <!-- Main Title -->
-      <h1 style="color: #444a53; font-size: 52px; margin: 0 0 30px 0; font-weight: bold; text-align: center;">Campaign<br/>Performance<br/>Report</h1>
-      
-      <!-- Subtitle -->
-      <h3 style="color: #444a53; font-size: 22px; font-weight: normal; margin: 20px 0 50px 0; text-align: center;">"Bridging the Gap between Cannabusinesses and Insurers"</h3>
-      
-      <!-- Footer Info -->
-      <p style="color: #888; margin-top: 40px; font-style: italic; font-size: 14px;">For Team 2X | Date 13/01/2022</p>
-    </div>
-  `;
-    return div;
-  };
-
-  const createOutboundPageWithDynamicHeight = () => {
-    const data = outboundData;
-    const formatDate = (date) => {
-      if (!date) return '';
-      const d = new Date(date);
-      if (isNaN(d.getTime())) return '';
-      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
-    };
-
-    const validEntries = data.pacingEntries.filter(e => e.date && e.value);
-    const values = validEntries.map(entry => parseFloat(entry.value) || 0);
-    const maxValue = Math.max(...values, 2500);
-
-    // Dynamic height based on max value
-    let graphHeight = 150;
-    if (maxValue > 5000) graphHeight = 200;
-    if (maxValue > 10000) graphHeight = 250;
-    if (maxValue > 20000) graphHeight = 300;
-
-    const w = 550;
-    const h = graphHeight;
-    const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
-    const points = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
-    const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
-    const area = `0,${h} ${areaPoints} ${w},${h}`;
-
-    // Pie chart calculations
-    const security = parseFloat(data.formData.securityPerc) || 0;
-    const safety = parseFloat(data.formData.safetyPerc) || 0;
-    const others = parseFloat(data.formData.othersPerc) || 0;
-    const total = security + safety + others;
-    const securityPercent = total > 0 ? (security / total) * 100 : 0;
-    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
-    const othersPercent = total > 0 ? (others / total) * 100 : 0;
-
-    const securityAngle = (securityPercent / 100) * 360;
-    const safetyAngle = (safetyPercent / 100) * 360;
-    const othersAngle = (othersPercent / 100) * 360;
-    const securityMidAngle = securityAngle / 2;
-    const safetyMidAngle = securityAngle + (safetyAngle / 2);
-    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
-
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 105 + (distance * Math.cos(rad)), y: 105 + (distance * Math.sin(rad)) };
-    };
-
-    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
-    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
-    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
-        return '';
       }
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 105 + 80 * Math.cos(startRad);
-      const y1 = 105 + 80 * Math.sin(startRad);
-      const x2 = 105 + 80 * Math.cos(endRad);
-      const y2 = 105 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 105,105 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    // Bounce rate calculations
-    const bounceRate = parseFloat(data.formData.bounceRate) || 0;
-    const maxBounce = 10;
-    const bounceDashoffset = 251 - (bounceRate / maxBounce) * 251;
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = 'auto';
-    div.style.minHeight = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">Outbound Performance</h1>
-      <span style="color: #fff; margin-left: 15px; font-size: 24px;">(${formatDate(data.formData.startDate)} - ${formatDate(data.formData.endDate)})</span>
-    </div>
-    <div style="display: flex; gap: 20px;">
-      <div style="width: 330px;">
-        <div style="background-color: #4db69f; color: #fff; padding: 40px 20px; text-align: center; border-radius: 8px;">
-          <h4 style="font-weight: 400; font-size: 24px; margin-bottom: 20px;">Total Emails Sent</h4>
-          <div style="font-size: 80px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
-        </div>
-        <div style="margin-top: 40px; position: relative; width: 300px; height: 300px; margin: 40px auto 0;">
-          <svg width="300" height="300" viewBox="0 0 210 210">
-            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-            <circle cx="105" cy="105" r="35" fill="#fdfbf2" />
-          </svg>
-          <div style="position: absolute; left: ${(securityLabelPos.x / 210) * 300}px; top: ${(securityLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(safetyLabelPos.x / 210) * 300}px; top: ${(safetyLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(othersLabelPos.x / 210) * 300}px; top: ${(othersLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
-        </div>
-      </div>
-      <div style="flex: 1;">
-        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">Total Delivered</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">Daily Avg Sends</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">Hard Bounced</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalHardBounced}</div>
-          </div>
-        </div>
-        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-          <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">Bounce Rate</h5>
-            <div style="text-align: center;">
-              <svg width="180" height="120" viewBox="0 0 180 120">
-                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
-                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#28a745" stroke-width="15" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="${bounceDashoffset}" />
-                <line x1="90" y1="100" x2="90" y2="50" stroke="#28a745" stroke-width="3" stroke-linecap="round" transform="rotate(${(bounceRate / maxBounce) * 180 - 90}, 90, 100)" />
-                <circle cx="90" cy="100" r="8" fill="#28a745" />
-              </svg>
-              <div style="font-size: 48px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
-            </div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa; text-align: right;">Daily Pacing Dynamic</h5>
-            <div style="display: flex; margin-top: 15px;">
-              <div style="height: ${h}px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; color: #bbb; padding-right: 12px;">
-                <span>${maxValue}</span>
-                <span>${Math.floor(maxValue / 2)}</span>
-                <span>0</span>
-              </div>
-              <div style="flex: 1; border-left: 1px solid #eee; border-bottom: 1px solid #eee;">
-                <svg width="100%" height="${h}" viewBox="0 0 550 ${h}" preserveAspectRatio="none">
-                  <polyline points="${area}" fill="#9bd9cc" fill-opacity="0.4" />
-                  <polyline points="${points}" fill="none" stroke="#4db69f" stroke-width="3" />
-                </svg>
-              </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #bbb; font-size: 13px; padding-left: 45px;">
-              <span>${validEntries[0]?.date ? formatDate(validEntries[0].date) : formatDate(data.formData.startDate)}</span>
-              <span>Daily Timeline</span>
-              <span>${validEntries[validEntries.length - 1]?.date ? formatDate(validEntries[validEntries.length - 1].date) : formatDate(data.formData.endDate)}</span>
-            </div>
-          </div>
-        </div>
-        <div style="display: flex; gap: 15px;">
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">EC Delivered - Managers</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.ecManagers}%</div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa;">EC Delivered - Directors</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.ecDirectors}%</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-    return div;
-  };
-
-  const getDynamicBarChartHeight = (bars) => {
-    if (!bars || bars.length === 0) {
-      return 180; // minimum height jab koi data nahi ho
     }
 
-    const numBars = bars.length;
-    const maxValue = Math.max(...bars.map(b => b.value), 100);
-
-    let height = 180;
-
-    // Number of bars ke hisaab se height decide karo
-    if (numBars <= 3) height = 180;
-    else if (numBars <= 5) height = 220;
-    else if (numBars <= 7) height = 280;
-    else height = 340;   // 8+ bars ke liye
-
-    // Agar values bahut badi hain toh extra height do
-    if (maxValue > 150) height += 30;
-    if (maxValue > 250) height += 40;
-
-    // Maximum limit lagao taaki page overflow na ho
-    return Math.min(height, 400);
-  };
-
-  const createPocOpensPageWithNoSpacing = () => {
-    const data = pocOpensData;
-
-    const formatDateForDisplayFn = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-    };
-
-    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
-    const bars = validEntries.map(entry => ({
-      label: formatDateForDisplayFn(entry.date),
-      value: parseInt(entry.value) || 0
-    }));
-
-    const dynamicBarHeight = getDynamicBarChartHeight(bars);
-
-    // ==================== PIE CHART CALCULATIONS ====================
-    const security = parseFloat(data.formData.securityPerc) || 0;
-    const safety = parseFloat(data.formData.safetyPerc) || 0;
-    const others = parseFloat(data.formData.othersPerc) || 0;
-    const total = security + safety + others;
-
-    const securityPercent = total > 0 ? (security / total) * 100 : 0;
-    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
-    const othersPercent = total > 0 ? (others / total) * 100 : 0;
-
-    const securityAngle = (securityPercent / 100) * 360;
-    const safetyAngle = (safetyPercent / 100) * 360;
-    const othersAngle = (othersPercent / 100) * 360;
-
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
-    };
-
-    const securityLabelPos = getLabelPosition(securityAngle / 2, 115);
-    const safetyLabelPos = getLabelPosition(securityAngle + (safetyAngle / 2), 115);
-    const othersLabelPos = getLabelPosition(securityAngle + safetyAngle + (othersAngle / 2), 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0) return '';
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 100 + 80 * Math.cos(startRad);
-      const y1 = 100 + 80 * Math.sin(startRad);
-      const x2 = 100 + 80 * Math.cos(endRad);
-      const y2 = 100 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    // ==================== BAR CHART HTML ====================
-    let barChartHtml = '';
-    if (bars.length > 0) {
-      const maxValue = Math.max(...bars.map(b => b.value), 1);
-      barChartHtml = bars.map((bar) => {
-        const percentage = (bar.value / maxValue) * 100;
-        return `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-          <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
-          <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
-            <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
-          </div>
-          <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
-        </div>`;
-      }).join('');
-    } else {
-      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display...</div>';
-    }
-
-    // ==================== FINAL HTML ====================
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = 'auto';
-    div.style.minHeight = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
-      <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle || 'PoC Opens'}</h1>
-      <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle || ''}</span>
-    </div>
-
-    <div style="display: flex; gap: 20px; align-items: flex-start;">
-      <!-- LEFT COLUMN -->
-      <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
-        <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
-          <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Opened</h4>
-          <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsOpened || 0}</div>
-        </div>
-
-        <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
-          <svg width="300" height="300" viewBox="0 0 200 200">
-            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-            <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
-          </svg>
-          <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      <!-- MIDDLE COLUMN -->
-      <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
-        <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Open Ratio</h5>
-          <svg width="150" height="150" viewBox="0 0 150 150">
-            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" 
-              stroke-dasharray="${2 * Math.PI * 65}" 
-              stroke-dashoffset="${2 * Math.PI * 65 * (1 - (parseFloat(data.formData.ecOpenRatio) || 0) / 100)}" 
-              stroke-linecap="round" transform="rotate(-90 75 75)" />
-            <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecOpenRatio || 0}%</text>
-          </svg>
-        </div>
-        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <span style="font-size: 16px; color: #888;">Open Manager</span>
-          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openManager || 0}%</span>
-        </div>
-        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <span style="font-size: 16px; color: #888;">Open Director</span>
-          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openDirector || 0}%</span>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN - Dynamic Bar Chart -->
-      <div style="width: 380px; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); align-self: flex-start;">
-        <div style="text-align: right; margin-bottom: 20px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-        <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicBarHeight}px;">
-          ${barChartHtml}
-        </div>
-      </div>
-    </div>
-  `;
-
-    return div;
-  };
-
-
-  const createPocClicksPageWithNoSpacing = () => {
-    const data = pocOpensData;
-
-    const formatDateForDisplayFn = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-    };
-
-    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
-    const bars = validEntries.map(entry => ({
-      label: formatDateForDisplayFn(entry.date),
-      value: parseInt(entry.value) || 0
-    }));
-
-    const dynamicBarHeight = getDynamicBarChartHeight(bars);
-
-    // ==================== PIE CHART CALCULATIONS ====================
-    const security = parseFloat(data.formData.securityPerc) || 0;
-    const safety = parseFloat(data.formData.safetyPerc) || 0;
-    const others = parseFloat(data.formData.othersPerc) || 0;
-    const total = security + safety + others;
-
-    const securityPercent = total > 0 ? (security / total) * 100 : 0;
-    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
-    const othersPercent = total > 0 ? (others / total) * 100 : 0;
-
-    const securityAngle = (securityPercent / 100) * 360;
-    const safetyAngle = (safetyPercent / 100) * 360;
-    const othersAngle = (othersPercent / 100) * 360;
-
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
-    };
-
-    const securityLabelPos = getLabelPosition(securityAngle / 2, 115);
-    const safetyLabelPos = getLabelPosition(securityAngle + (safetyAngle / 2), 115);
-    const othersLabelPos = getLabelPosition(securityAngle + safetyAngle + (othersAngle / 2), 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0) return '';
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 100 + 80 * Math.cos(startRad);
-      const y1 = 100 + 80 * Math.sin(startRad);
-      const x2 = 100 + 80 * Math.cos(endRad);
-      const y2 = 100 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    // ==================== BAR CHART HTML ====================
-    let barChartHtml = '';
-    if (bars.length > 0) {
-      const maxValue = Math.max(...bars.map(b => b.value), 1);
-      barChartHtml = bars.map((bar) => {
-        const percentage = (bar.value / maxValue) * 100;
-        return `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-          <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
-          <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
-            <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
-          </div>
-          <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
-        </div>`;
-      }).join('');
-    } else {
-      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display...</div>';
-    }
-
-    // ==================== FINAL HTML ====================
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = 'auto';
-    div.style.minHeight = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
-      <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle || 'PoC Opens'}</h1>
-      <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle || ''}</span>
-    </div>
-
-    <div style="display: flex; gap: 20px; align-items: flex-start;">
-      <!-- LEFT COLUMN -->
-      <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
-        <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
-          <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Opened</h4>
-          <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsOpened || 0}</div>
-        </div>
-
-        <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
-          <svg width="300" height="300" viewBox="0 0 200 200">
-            ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-            ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-            ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-            <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
-          </svg>
-          <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${securityPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safetyPercent.toFixed(1)}%</div>
-          <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${othersPercent.toFixed(1)}%</div>
-        </div>
-      </div>
-
-      <!-- MIDDLE COLUMN -->
-      <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
-        <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Open Ratio</h5>
-          <svg width="150" height="150" viewBox="0 0 150 150">
-            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-            <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" 
-              stroke-dasharray="${2 * Math.PI * 65}" 
-              stroke-dashoffset="${2 * Math.PI * 65 * (1 - (parseFloat(data.formData.ecOpenRatio) || 0) / 100)}" 
-              stroke-linecap="round" transform="rotate(-90 75 75)" />
-            <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecOpenRatio || 0}%</text>
-          </svg>
-        </div>
-        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <span style="font-size: 16px; color: #888;">Open Manager</span>
-          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openManager || 0}%</span>
-        </div>
-        <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <span style="font-size: 16px; color: #888;">Open Director</span>
-          <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openDirector || 0}%</span>
-        </div>
-      </div>
-
-      <!-- RIGHT COLUMN - Dynamic Bar Chart -->
-      <div style="width: 380px; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); align-self: flex-start;">
-        <div style="text-align: right; margin-bottom: 20px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-        <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicBarHeight}px;">
-          ${barChartHtml}
-        </div>
-      </div>
-    </div>
-  `;
-
-    return div;
-  };
-
-  const createLandingPageWithNoSpacing = () => {
-    const data = landingPageData;
-
-    const locationData = data.stateEntries
-      .filter(entry => entry.state && entry.value)
-      .map(entry => ({
-        state: entry.state.trim(),
-        value: parseInt(entry.value) || 0
-      }));
-
-    if (locationData.length === 0) {
-      locationData.push({ state: "No Data", value: 10 });
-    }
-
-    const numBars = locationData.length;
-    const maxValue = Math.max(...locationData.map(d => d.value), 10);
-
-    // Dynamic Width
-    let chartWidth = 480;
-    if (numBars >= 5) chartWidth = 580;
-    if (numBars >= 6) chartWidth = 680;
-    if (numBars >= 7) chartWidth = 780;
-
-    const chartHeight = 260;
-    const barWidth = Math.max(32, Math.min(48, Math.floor((chartWidth - 80) / numBars)));
-    const startX = 55;
-
-    let barsSvg = '';
-    locationData.forEach((item, index) => {
-      const barHeight = Math.max(8, (item.value / maxValue) * (chartHeight - 60));
-      const x = startX + (index * (barWidth + 18));
-      const y = chartHeight - barHeight + 38;
-
-      barsSvg += `
-      <rect 
-        x="${x}" 
-        y="${y}" 
-        width="${barWidth}" 
-        height="${barHeight}" 
-        fill="#4db69f" 
-        rx="4" />
-      <text 
-        x="${x + barWidth / 2}" 
-        y="${y - 8}" 
-        text-anchor="middle" 
-        font-size="11" 
-        fill="#2c7a6f" 
-        font-weight="bold">${item.value}</text>
-    `;
+    setOpensToOutboundError(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
     });
+    setHasOpensValidationError(Object.keys(opensToOutboundError).length > 0);
 
-    // X-axis labels (Line ke Niche)
-    let xLabels = '';
-    locationData.forEach((item, index) => {
-      const x = startX + (index * (barWidth + 18)) + barWidth / 2;
-      xLabels += `
-      <text 
-        x="${x}" 
-        y="${chartHeight + 68}" 
-        text-anchor="middle" 
-        font-size="11" 
-        fill="#555" 
-        font-weight="500">${item.state}</text>
-    `;
+    setOpensBarEntries(prev => {
+      return prev.map(entry => {
+        if (entry.id === id) {
+          return { ...entry, [field]: value };
+        }
+        return entry;
+      });
     });
+    setIsPocOpensSaved(false);
+    setPocOpensValidationMessage('');
+  }, [opensBarEntries, pacingEntries, formatDateForDisplay, opensToOutboundError]);
 
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = 'auto';
-    div.style.minHeight = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
+  // Updated handleClicksBarEntryChange with Opens validation
+  const handleClicksBarEntryChange = useCallback((id, field, value) => {
+    if (field === 'value') {
+      const entry = clicksBarEntries.find(e => e.id === id);
+      if (entry && entry.date) {
+        const newValueNum = parseFloat(value) || 0;
 
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">${data.formData.reportTitle || 'Landing Page Performance'}</h1>
-    </div>
-
-    <div style="display: flex; gap: 30px; margin-top: 20px;">
-      <div style="flex: 2;">
-        <div style="background: #fff; padding: 25px 30px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-          <h4 style="color: #444; margin-bottom: 22px; font-weight: 500; text-align: center;">Audience Location Overview</h4>
-          
-          <div style="position: relative; height: 360px;">
-            <svg width="100%" height="360" viewBox="0 0 ${chartWidth + 100} 360" preserveAspectRatio="xMidYMid meet">
-
-              <!-- Y Axis -->
-              <line x1="48" y1="45" x2="48" y2="${chartHeight + 45}" stroke="#ddd" stroke-width="1.5" />
-              <!-- X Axis Line -->
-              <line x1="48" y1="${chartHeight + 45}" x2="${chartWidth + 65}" y2="${chartHeight + 45}" stroke="#ddd" stroke-width="1.5" />
-
-              <!-- Y Labels -->
-              <text x="38" y="52" text-anchor="end" font-size="10.5" fill="#777">${maxValue}</text>
-              <text x="38" y="${chartHeight * 0.75 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.75)}</text>
-              <text x="38" y="${chartHeight * 0.5 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.5)}</text>
-              <text x="38" y="${chartHeight * 0.25 + 45}" text-anchor="end" font-size="10.5" fill="#777">${Math.floor(maxValue * 0.25)}</text>
-              <text x="38" y="${chartHeight + 52}" text-anchor="end" font-size="10.5" fill="#777">0</text>
-
-              ${barsSvg}
-              ${xLabels}
-
-            </svg>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Side Metrics -->
-      <div style="flex: 1; display: flex; flex-direction: column; gap: 16px;">
-        <div style="display: flex; gap: 16px;">
-          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Total Users</h5>
-            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.totalUsers || 0}</div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Avg. Session</h5>
-            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.avgSession || 0}</div>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 16px;">
-          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Bounced Users</h5>
-            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.bouncedUsers || 0}</div>
-          </div>
-          <div style="flex: 1; background: #fff; padding: 24px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08);">
-            <h5 style="color: #888; font-size: 14px; margin-bottom: 6px;">Form Downloads</h5>
-            <div style="font-size: 46px; font-weight: bold; color: #2c3e50;">${data.formData.formDownloads || 0}</div>
-          </div>
-        </div>
-
-        <div style="background: #fff; padding: 28px 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); margin-top: 8px;">
-          <h5 style="color: #888; font-size: 14px; margin-bottom: 12px;">Bounce Rate</h5>
-          <svg width="138" height="138" viewBox="0 0 140 140">
-            <circle cx="70" cy="70" r="56" fill="transparent" stroke="#e5e7eb" stroke-width="16" />
-            <circle cx="70" cy="70" r="56" fill="transparent" stroke="#f59e0b" stroke-width="16"
-              stroke-dasharray="${2 * Math.PI * 56}"
-              stroke-dashoffset="${2 * Math.PI * 56 * (1 - (parseFloat(data.formData.bounceRate) || 0) / 100)}"
-              stroke-linecap="round" transform="rotate(-90 70 70)" />
-            <text x="70" y="82" text-anchor="middle" font-size="28" font-weight="700" fill="#1f2937">${data.formData.bounceRate || 0}%</text>
-          </svg>
-        </div>
-      </div>
-    </div>
-  `;
-
-    return div;
-  };
-
-
-  const createOutboundPage = () => {
-    const data = outboundData;
-    const formatDate = (date) => {
-      if (!date) return '';
-      const d = new Date(date);
-      if (isNaN(d.getTime())) return '';
-      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
-    };
-
-    const validEntries = data.pacingEntries.filter(e => e.date && e.value);
-    const values = validEntries.map(entry => parseFloat(entry.value) || 0);
-    const maxValue = Math.max(...values, 2500);
-    const w = 550, h = 150;
-    const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
-    const points = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
-    const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
-    const area = `0,${h} ${areaPoints} ${w},${h}`;
-
-    const security = parseFloat(data.formData.securityPerc);
-    const safety = parseFloat(data.formData.safetyPerc);
-    const others = parseFloat(data.formData.othersPerc);
-    const securityAngle = (security / 100) * 360;
-    const safetyAngle = (safety / 100) * 360;
-    const othersAngle = (others / 100) * 360;
-    const securityMidAngle = securityAngle / 2;
-    const safetyMidAngle = securityAngle + (safetyAngle / 2);
-    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
-
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 105 + (distance * Math.cos(rad)), y: 105 + (distance * Math.sin(rad)) };
-    };
-
-    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
-    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
-    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
-        return '';
+        const opensEntry = opensBarEntries.find(e => e.date === entry.date);
+        if (opensEntry && opensEntry.value) {
+          const opensValue = parseFloat(opensEntry.value) || 0;
+          if (newValueNum > opensValue) {
+            setClicksToOpensError(prev => ({
+              ...prev,
+              [id]: `❌ Cannot set value ${newValueNum} for ${formatDateForDisplay(entry.date)} because it exceeds Opens value (${opensValue}).`
+            }));
+            setHasClicksValidationError(true);
+            return;
+          }
+        }
       }
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 105 + 80 * Math.cos(startRad);
-      const y1 = 105 + 80 * Math.sin(startRad);
-      const x2 = 105 + 80 * Math.cos(endRad);
-      const y2 = 105 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 105,105 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    const bounceRate = parseFloat(data.formData.bounceRate) || 0;
-    const maxBounce = 10;
-    const bounceDashoffset = 251 - (bounceRate / maxBounce) * 251;
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-    div.innerHTML = `
-      <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-        <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">Outbound Performance</h1>
-        <span style="color: #fff; margin-left: 15px; font-size: 24px;">(${formatDate(data.formData.startDate)} - ${formatDate(data.formData.endDate)})</span>
-      </div>
-      <div style="display: flex; gap: 20px;">
-        <div style="width: 330px;">
-          <div style="background-color: #4db69f; color: #fff; padding: 40px 20px; text-align: center; border-radius: 8px;">
-            <h4 style="font-weight: 400; font-size: 24px; margin-bottom: 20px;">Total Emails Sent</h4>
-            <div style="font-size: 80px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
-          </div>
-          <div style="margin-top: 40px; position: relative; width: 300px; height: 300px; margin: 40px auto 0;">
-            <svg width="300" height="300" viewBox="0 0 210 210">
-              ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-              ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-              ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-              <circle cx="105" cy="105" r="35" fill="#fdfbf2" />
-            </svg>
-            <div style="position: absolute; left: ${(securityLabelPos.x / 210) * 300}px; top: ${(securityLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${security.toFixed(1)}%</div>
-            <div style="position: absolute; left: ${(safetyLabelPos.x / 210) * 300}px; top: ${(safetyLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safety.toFixed(1)}%</div>
-            <div style="position: absolute; left: ${(othersLabelPos.x / 210) * 300}px; top: ${(othersLabelPos.y / 210) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${others.toFixed(1)}%</div>
-          </div>
-        </div>
-        <div style="flex: 1;">
-          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">Total Delivered</h5>
-              <div style="font-size: 48px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">Daily Avg Sends</h5>
-              <div style="font-size: 48px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">Hard Bounced</h5>
-              <div style="font-size: 48px; font-weight: bold;">${data.formData.totalHardBounced}</div>
-            </div>
-          </div>
-          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">Bounce Rate</h5>
-              <div style="text-align: center;">
-                <svg width="180" height="120" viewBox="0 0 180 120">
-                  <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
-                  <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#28a745" stroke-width="15" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="${bounceDashoffset}" />
-                  <line x1="90" y1="100" x2="90" y2="50" stroke="#28a745" stroke-width="3" stroke-linecap="round" transform="rotate(${(bounceRate / maxBounce) * 180 - 90}, 90, 100)" />
-                  <circle cx="90" cy="100" r="8" fill="#28a745" />
-                </svg>
-                <div style="font-size: 48px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
-              </div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa; text-align: right;">Daily Pacing Dynamic</h5>
-              <div style="display: flex; margin-top: 15px;">
-                <div style="height: 150px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; color: #bbb; padding-right: 12px;">
-                  <span>${maxValue}</span>
-                  <span>${Math.floor(maxValue / 2)}</span>
-                  <span>0</span>
-                </div>
-                <div style="flex: 1; border-left: 1px solid #eee; border-bottom: 1px solid #eee;">
-                  <svg width="100%" height="150" viewBox="0 0 550 150" preserveAspectRatio="none">
-                    <polyline points="${area}" fill="#9bd9cc" fill-opacity="0.4" />
-                    <polyline points="${points}" fill="none" stroke="#4db69f" stroke-width="3" />
-                  </svg>
-                </div>
-              </div>
-              <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #bbb; font-size: 13px; padding-left: 45px;">
-                <span>${validEntries[0]?.date ? formatDate(validEntries[0].date) : formatDate(data.formData.startDate)}</span>
-                <span>Daily Timeline</span>
-                <span>${validEntries[validEntries.length - 1]?.date ? formatDate(validEntries[validEntries.length - 1].date) : formatDate(data.formData.endDate)}</span>
-              </div>
-            </div>
-          </div>
-          <div style="display: flex; gap: 15px;">
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">EC Delivered - Managers</h5>
-              <div style="font-size: 48px; font-weight: bold;">${data.formData.ecManagers}%</div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-              <h5 style="color: #aaa;">EC Delivered - Directors</h5>
-              <div style="font-size: 48px; font-weight: bold;">${data.formData.ecDirectors}%</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-    return div;
-  };
-
-  const createPocOpensPage = () => {
-    const data = pocOpensData;
-    const formatDateForDisplayFn = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-    };
-
-    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
-    const totalDataSum = validEntries.reduce((sum, e) => sum + (parseInt(e.value) || 0), 0);
-    const dynamicHeight = Math.max(80, Math.min(300, validEntries.length * 20 + Math.ceil(totalDataSum / 60)));
-    const bars = validEntries.map(entry => ({
-      label: formatDateForDisplayFn(entry.date),
-      value: parseInt(entry.value) || 0
-    }));
-
-    const security = parseFloat(data.formData.securityPerc);
-    const safety = parseFloat(data.formData.safetyPerc);
-    const others = parseFloat(data.formData.othersPerc);
-    const securityAngle = (security / 100) * 360;
-    const safetyAngle = (safety / 100) * 360;
-    const othersAngle = (others / 100) * 360;
-    const securityMidAngle = securityAngle / 2;
-    const safetyMidAngle = securityAngle + (safetyAngle / 2);
-    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
-
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
-    };
-
-    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
-    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
-    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
-        return '';
-      }
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 100 + 80 * Math.cos(startRad);
-      const y1 = 100 + 80 * Math.sin(startRad);
-      const x2 = 100 + 80 * Math.cos(endRad);
-      const y2 = 100 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    let barChartHtml = '';
-    if (bars.length > 0) {
-      const maxValue = Math.max(...bars.map(b => b.value), 1);
-      barChartHtml = bars.map((bar, i) => {
-        const percentage = (bar.value / maxValue) * 100;
-        return `
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-            <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
-            <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
-              <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
-            </div>
-            <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
-          </div>
-        `;
-      }).join('');
-    } else {
-      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display. Add entries using the form above.</div>';
     }
 
-    div.innerHTML = `
-      <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
-        <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle}</h1>
-        <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle}</span>
-      </div>
-      <div style="display: flex; gap: 20px;">
-        <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
-          <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
-            <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Opened</h4>
-            <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsOpened}</div>
-          </div>
-          <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
-            <svg width="300" height="300" viewBox="0 0 200 200">
-              ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-              ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-              ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-              <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
-            </svg>
-            <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${security}%</div>
-            <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safety}%</div>
-            <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${others}%</div>
-          </div>
-        </div>
-        <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
-          <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Open Ratio</h5>
-            <svg width="150" height="150" viewBox="0 0 150 150">
-              <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-              <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" stroke-dasharray="${2 * Math.PI * 65}" stroke-dashoffset="${2 * Math.PI * 65 * (1 - data.formData.ecOpenRatio / 100)}" stroke-linecap="round" transform="rotate(-90 75 75)" />
-              <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecOpenRatio}%</text>
-            </svg>
-          </div>
-          <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span style="font-size: 16px; color: #888;">Open Manager</span>
-            <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openManager}%</span>
-          </div>
-          <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span style="font-size: 16px; color: #888;">Open Director</span>
-            <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.openDirector}%</span>
-          </div>
-        </div>
-        <div style="flex: 1; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <div style="text-align: right; margin-bottom: 25px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-          <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${dynamicHeight}px;">
-            ${barChartHtml}
-          </div>
-        </div>
-      </div>
-    `;
-    return div;
-  };
+    setClicksToOpensError(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+    setHasClicksValidationError(Object.keys(clicksToOpensError).length > 0);
 
-  const createPocClicksPage = () => {
-    const data = pocClicksData;
-    const formatDateForDisplayFn = (dateString) => {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return '';
-      return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear().toString().slice(-2)}`;
-    };
+    setClicksBarEntries(prev => {
+      return prev.map(entry => {
+        if (entry.id === id) {
+          return { ...entry, [field]: value };
+        }
+        return entry;
+      });
+    });
+    setIsPocClicksSaved(false);
+    setPocClicksValidationMessage('');
+  }, [clicksBarEntries, opensBarEntries, formatDateForDisplay, clicksToOpensError]);
 
-    const validEntries = data.barEntries.filter(entry => entry.date && entry.value);
-    const totalDataSumClicks = validEntries.reduce((sum, e) => sum + (parseInt(e.value) || 0), 0);
-    const barChartHeight = Math.max(80, Math.min(320, validEntries.length * 20 + Math.ceil(totalDataSumClicks / 60)));
-    const bars = validEntries.map(entry => ({
-      label: formatDateForDisplayFn(entry.date),
-      value: parseInt(entry.value) || 0
-    }));
+  // Helper functions to clear errors
+  const clearOpensValidationError = useCallback((id) => {
+    setOpensValidationErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+  }, []);
 
-    const security = parseFloat(data.formData.securityPerc);
-    const safety = parseFloat(data.formData.safetyPerc);
-    const others = parseFloat(data.formData.othersPerc);
-    const securityAngle = (security / 100) * 360;
-    const safetyAngle = (safety / 100) * 360;
-    const othersAngle = (others / 100) * 360;
-    const securityMidAngle = securityAngle / 2;
-    const safetyMidAngle = securityAngle + (safetyAngle / 2);
-    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
+  const clearClicksValidationError = useCallback((id) => {
+    setClicksValidationErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+  }, []);
 
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return { x: 100 + (distance * Math.cos(rad)), y: 100 + (distance * Math.sin(rad)) };
-    };
+  const clearOpensToOutboundError = useCallback((id) => {
+    setOpensToOutboundError(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+    setHasOpensValidationError(Object.keys(opensToOutboundError).length > 0);
+  }, [opensToOutboundError]);
 
-    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
-    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
-    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
+  const clearClicksToOpensError = useCallback((id) => {
+    setClicksToOpensError(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[id];
+      return newErrors;
+    });
+    setHasClicksValidationError(Object.keys(clicksToOpensError).length > 0);
+  }, [clicksToOpensError]);
 
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
-        return '';
-      }
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 100 + 80 * Math.cos(startRad);
-      const y1 = 100 + 80 * Math.sin(startRad);
-      const x2 = 100 + 80 * Math.cos(endRad);
-      const y2 = 100 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 100,100 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
-    };
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    let barChartHtml = '';
-    if (bars.length > 0) {
-      const maxValue = Math.max(...bars.map(b => b.value), 1);
-      barChartHtml = bars.map((bar, i) => {
-        const percentage = (bar.value / maxValue) * 100;
-        return `
-          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px;">
-            <div style="width: 70px; font-size: 11px; color: #666;">${bar.label}</div>
-            <div style="flex: 1; background-color: #f0f0f0; height: 28px; border-radius: 3px; overflow: hidden;">
-              <div style="width: ${percentage}%; background-color: #4db69f; height: 100%;"></div>
-            </div>
-            <div style="width: 40px; font-size: 11px; color: #666; text-align: right;">${bar.value}</div>
-          </div>
-        `;
-      }).join('');
-    } else {
-      barChartHtml = '<div style="text-align: center; padding: 40px; color: #999;">No data to display. Add entries using the form above.</div>';
-    }
-
-    div.innerHTML = `
-      <div style="background-color: #545454; padding: 15px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; align-items: baseline;">
-        <h1 style="color: #fff; margin: 0; font-size: 48px; font-weight: 400;">${data.formData.reportTitle}</h1>
-        <span style="color: #fff; margin-left: 15px; font-size: 24px; opacity: 0.8;">${data.formData.reportSubtitle}</span>
-      </div>
-      <div style="display: flex; gap: 20px;">
-        <div style="width: 340px; display: flex; flex-direction: column; gap: 30px;">
-          <div style="background-color: #4db69f; color: #fff; padding: 30px 10px; text-align: center; border-radius: 8px;">
-            <h4 style="font-weight: 400; font-size: 22px; margin-bottom: 15px;">Total ECs Clicked</h4>
-            <div style="font-size: 72px; font-weight: bold;">${data.formData.totalECsClicked}</div>
-          </div>
-          <div style="position: relative; width: 300px; height: 300px; margin: 0 auto;">
-            <svg width="300" height="300" viewBox="0 0 200 200">
-              ${securityAngle > 0 ? `<path d="${createPieSegment(0, securityAngle)}" fill="#7d8bb1" stroke="white" stroke-width="2" />` : ''}
-              ${safetyAngle > 0 ? `<path d="${createPieSegment(securityAngle, safetyAngle)}" fill="#a2bad0" stroke="white" stroke-width="2" />` : ''}
-              ${othersAngle > 0 ? `<path d="${createPieSegment(securityAngle + safetyAngle, othersAngle)}" fill="#d1eef4" stroke="white" stroke-width="2" />` : ''}
-              <circle cx="100" cy="100" r="35" fill="#fdfbf2" />
-            </svg>
-            <div style="position: absolute; left: ${(securityLabelPos.x / 200) * 300}px; top: ${(securityLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Security ${security}%</div>
-            <div style="position: absolute; left: ${(safetyLabelPos.x / 200) * 300}px; top: ${(safetyLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Safety ${safety}%</div>
-            <div style="position: absolute; left: ${(othersLabelPos.x / 200) * 300}px; top: ${(othersLabelPos.y / 200) * 300 - 12}px; transform: translate(-50%, -50%); background: white; padding: 4px 10px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); white-space: nowrap; font-size: 11px; font-weight: bold; border: 1px solid #e0e0e0;">Others ${others}%</div>
-          </div>
-        </div>
-        <div style="width: 240px; display: flex; flex-direction: column; gap: 15px;">
-          <div style="background-color: #fff; padding: 25px 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa; font-size: 18px; font-weight: 400; margin-bottom: 10px;">EC Click Ratio</h5>
-            <svg width="150" height="150" viewBox="0 0 150 150">
-              <circle cx="75" cy="75" r="65" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-              <circle cx="75" cy="75" r="65" fill="transparent" stroke="#76e5eb" stroke-width="12" stroke-dasharray="${2 * Math.PI * 65}" stroke-dashoffset="${2 * Math.PI * 65 * (1 - data.formData.ecClickRatio / 100)}" stroke-linecap="round" transform="rotate(-90 75 75)" />
-              <text x="75" y="82" text-anchor="middle" font-size="24" font-weight="bold" fill="#444">${data.formData.ecClickRatio}%</text>
-            </svg>
-          </div>
-          <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span style="font-size: 16px; color: #888;">Clicks Manager</span>
-            <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.clicksManager}%</span>
-          </div>
-          <div style="background-color: #fff; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <span style="font-size: 16px; color: #888;">Clicks Director</span>
-            <span style="font-size: 40px; font-weight: bold; color: #333;">${data.formData.clicksDirector}%</span>
-          </div>
-        </div>
-        <div style="flex: 1; background-color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <div style="text-align: right; margin-bottom: 25px; color: #aaa; font-size: 14px;">Daily Pacing Dynamic</div>
-          <div style="display: flex; flex-direction: column; gap: 10px; min-height: ${barChartHeight}px;">
-            ${barChartHtml}
-          </div>
-        </div>
-      </div>
-    `;
-    return div;
-  };
-
-  const createLandingPage = () => {
-    const data = landingPageData;
-
-    const locationData = data.stateEntries
-      .filter(entry => entry.state && entry.value)
-      .map(entry => ({
-        state: entry.state,
-        value: parseInt(entry.value) || 0
-      }));
-
-    const maxValue = Math.max(...locationData.map(d => d.value), 1);
-    const totalLocationDataSum = locationData.reduce((sum, d) => sum + d.value, 0);
-    const chartHeight = Math.max(80, Math.min(300, locationData.length * 18 + Math.ceil(totalLocationDataSum / 40)));
-    const chartWidth = 700;
-    const barWidth = Math.min(35, (chartWidth / locationData.length) - 10);
-    const startX = 60;
-
-    let barsSvg = '';
-    if (locationData.length > 0) {
-      barsSvg = locationData.map((item, index) => {
-        const barHeight = (item.value / maxValue) * chartHeight;
-        const x = startX + (index * (barWidth + 15));
-        const y = chartHeight - barHeight + 30;
-        return `
-          <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="#4db69f" rx="3" />
-          <text x="${x + barWidth / 2}" y="${chartHeight + 40}" text-anchor="middle" font-size="10" fill="#666">${item.state}</text>
-          <text x="${x + barWidth / 2}" y="${y - 5}" text-anchor="middle" font-size="9" fill="#4db69f" font-weight="bold">${item.value}</text>
-        `;
-      }).join('');
-    }
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.height = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    div.innerHTML = `
-      <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-        <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">${data.formData.reportTitle}</h1>
-      </div>
-      
-      <div style="display: flex; gap: 30px; margin-top: 20px;">
-        <div style="flex: 2;">
-          <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-            <h4 style="color: #444; margin-bottom: 20px; font-weight: 500; text-align: center;">Audience Location Overview</h4>
-            <div style="position: relative; min-height: ${Math.max(280, (locationData.length * 35) + 80)}px;">
-              ${locationData.length > 0 ? `
-                <svg width="100%" height="${chartHeight + 60}" viewBox="0 0 800 ${chartHeight + 60}" preserveAspectRatio="xMidYMid meet">
-                  <line x1="40" y1="30" x2="40" y2="${chartHeight + 30}" stroke="#ccc" stroke-width="1" />
-                  <line x1="40" y1="${chartHeight + 30}" x2="${chartWidth + 50}" y2="${chartHeight + 30}" stroke="#ccc" stroke-width="1" />
-                  <text x="30" y="30" text-anchor="end" font-size="10" fill="#999">${maxValue}</text>
-                  <text x="30" y="${chartHeight / 4 + 30}" text-anchor="end" font-size="10" fill="#999">${Math.floor(maxValue * 0.75)}</text>
-                  <text x="30" y="${chartHeight / 2 + 30}" text-anchor="end" font-size="10" fill="#999">${Math.floor(maxValue * 0.5)}</text>
-                  <text x="30" y="${chartHeight * 3 / 4 + 30}" text-anchor="end" font-size="10" fill="#999">${Math.floor(maxValue * 0.25)}</text>
-                  <text x="30" y="${chartHeight + 30}" text-anchor="end" font-size="10" fill="#999">0</text>
-                  ${barsSvg}
-                </svg>
-              ` : '<div style="text-align: center; padding: 80px; color: #999;">No location data available</div>'}
-            </div>
-          </div>
-        </div>
-        
-        <div style="flex: 1;">
-          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-              <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Total Users</h5>
-              <div style="font-size: 42px; font-weight: bold; color: #333;">${data.formData.totalUsers}</div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-              <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Avg. Session</h5>
-              <div style="font-size: 42px; font-weight: bold; color: #333;">${data.formData.avgSession}</div>
-            </div>
-          </div>
-          
-          <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-              <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Bounced Users</h5>
-              <div style="font-size: 42px; font-weight: bold; color: #333;">${data.formData.bouncedUsers}</div>
-            </div>
-            <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-              <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Form Downloads</h5>
-              <div style="font-size: 42px; font-weight: bold; color: #333;">${data.formData.formDownloads}</div>
-            </div>
-          </div>
-          
-          <div style="background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-            <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Bounce Rate</h5>
-            <svg width="120" height="120" viewBox="0 0 120 120">
-              <circle cx="60" cy="60" r="50" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-              <circle cx="60" cy="60" r="50" fill="transparent" stroke="#f39c12" stroke-width="12" 
-                stroke-dasharray="${2 * Math.PI * 50}" 
-                stroke-dashoffset="${2 * Math.PI * 50 * (1 - parseFloat(data.formData.bounceRate) / 100)}" 
-                stroke-linecap="round" transform="rotate(-90 60 60)" />
-              <text x="60" y="70" text-anchor="middle" font-size="24" font-weight="bold" fill="#333">${data.formData.bounceRate}%</text>
-            </svg>
-          </div>
-        </div>
-      </div>
-    `;
-    return div;
-  };
-
-  const createWebVitalsPage = () => {
-    const data = webVitalsData;
-
-    // Check if data exists
-    if (!data || !data.formData) {
-      const div = document.createElement('div');
-      div.style.width = '1122px';
-      div.style.minHeight = '794px';
-      div.style.backgroundColor = '#fdfbf2';
-      div.style.padding = '40px';
-      div.style.boxSizing = 'border-box';
-      div.style.fontFamily = 'Arial, sans-serif';
-      div.innerHTML = `
-      <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-        <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">Web Page Vitals</h1>
-      </div>
-      <div style="text-align: center; padding: 100px; color: #999;">
-        No data available. Please save the Web Vitals data first.
-      </div>
-    `;
-      return div;
-    }
-
-    const div = document.createElement('div');
-    div.style.width = '1122px';
-    div.style.minHeight = '794px';
-    div.style.backgroundColor = '#fdfbf2';
-    div.style.padding = '40px';
-    div.style.boxSizing = 'border-box';
-    div.style.fontFamily = 'Arial, sans-serif';
-
-    let screenshotHtml = '';
-    if (data.screenshotImage && data.screenshotImage !== '') {
-      screenshotHtml = `
-      <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 20px;">
-        <div style="text-align: center; background: #f5f5f5; border-radius: 8px; padding: 20px; min-height: 300px; display: flex; align-items: center; justify-content: center;">
-          <img 
-            src="${data.screenshotImage}" 
-            style="max-width: 100%; max-height: 400px; width: auto; height: auto; object-fit: contain; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" 
-            alt="Screenshot"
-            crossorigin="anonymous"
-          />
-        </div>
-      </div>
-    `;
-    } else {
-      screenshotHtml = `
-      <div style="background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); margin-top: 20px;">
-        <div style="text-align: center; padding: 60px; color: #999; background: #f5f5f5; border-radius: 8px;">
-          No screenshot uploaded
-        </div>
-      </div>
-    `;
-    }
-
-    // Speed visualization data
-    const speedValues = speedEntries.map(entry => parseFloat(entry.value) || 0);
-    const maxSpeed = Math.max(...speedValues, 5);
-    const totalSpeedDataSum = speedValues.reduce((sum, v) => sum + v, 0);
-    const speedChartHeight = Math.max(80, Math.min(300, speedValues.length * 22 + Math.ceil(totalSpeedDataSum / 50)));
-
-    let speedBarsHtml = '';
-    if (speedValues.length > 0) {
-      speedBarsHtml = `
-      <div style="margin-top: 30px; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h4 style="color: #444; margin-bottom: 20px; font-weight: 500;">Speed Visualization</h4>
-        <div style="display: flex; align-items: flex-end; gap: 8px; height: ${speedChartHeight}px; margin-bottom: 20px;">
-          ${speedValues.map((value, index) => {
-        const heightPercent = (value / maxSpeed) * 100;
-        return `
-              <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                <div style="height: ${heightPercent}%; width: 100%; background-color: #4db69f; border-radius: 4px 4px 0 0; min-height: 4px;"></div>
-                <div style="margin-top: 8px; font-size: 11px; color: #666; transform: rotate(-45deg); transform-origin: top left; white-space: nowrap;">${value}s</div>
-              </div>
-            `;
-      }).join('')}
-        </div>
-        <div style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
-          Page Load Time Progression
-        </div>
-      </div>
-    `;
-    }
-
-    div.innerHTML = `
-    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px;">
-      <h1 style="color: #fff; margin: 0; font-size: 44px; font-weight: 400;">${data.formData.reportTitle || 'Web Page Vitals'}</h1>
-    </div>
-    
-    <!-- Top Metrics Row -->
-    <div style="display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 200px; background: #fff; padding: 25px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Avg. Page Load Speed</h5>
-        <div style="font-size: 48px; font-weight: bold; color: #333;">${data.formData.avgPageLoadSpeed || '0'}s</div>
-      </div>
-      <div style="flex: 1; min-width: 200px; background: #fff; padding: 25px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Structure Metric</h5>
-        <div style="font-size: 48px; font-weight: bold; color: #333;">${data.formData.structureMetrix || '0'}%</div>
-      </div>
-      <div style="flex: 1; min-width: 200px; background: #fff; padding: 25px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">Largest Element (LCP)</h5>
-        <div style="font-size: 48px; font-weight: bold; color: #333;">${data.formData.largestElementLCP || '0'}s</div>
-      </div>
-      <div style="flex: 1; min-width: 200px; background: #fff; padding: 25px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-        <h5 style="color: #aaa; font-size: 14px; margin-bottom: 10px;">TBT Script Blocks</h5>
-        <div style="font-size: 48px; font-weight: bold; color: #333;">${data.formData.tbtScriptBlocks || '0'}MS</div>
-      </div>
-    </div>
-    
-    ${screenshotHtml}
-    ${speedBarsHtml}
-  `;
-    return div;
-  };
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return '';
-    const day = d.getDate().toString().padStart(2, '0');
-    const month = (d.getMonth() + 1).toString().padStart(2, '0');
-    const year = d.getFullYear().toString().slice(-2);
-    return `${day}/${month}/${year}`;
-  };
-
-  // Add this BEFORE the CampaignReportTabs component
-  const CustomTextInput = ({ value, onChange, placeholder = "e.g. FL, OK, NY", size = "sm" }) => {
-    const [localValue, setLocalValue] = useState(value || '');
+  // Updated PoC Opens Form Component - with non-editable date
+  const PoCOpensFormComponent = ({
+    pocOpensFormData,
+    handlePocOpensChange,
+    handlePocOpensNumberChange,
+    opensBarEntries,
+    handleOpensBarEntryChange,
+    savePocOpensData,
+    setActiveTab,
+    formatDateForDisplay,
+    outboundTotalDelivered,
+    jobRoleEntries,
+    jobScenarioEntries,
+    handleJobRoleValueChange,
+    handleJobScenarioValueChange,
+    opensToOutboundError,
+    clearOpensToOutboundError,
+    opensRoleError,
+    opensScenarioError
+  }) => {
+    const [localOpensValues, setLocalOpensValues] = useState({});
 
     useEffect(() => {
-      setLocalValue(value || '');
-    }, [value]);
+      const values = {};
+      opensBarEntries.forEach(entry => {
+        values[entry.id] = entry.value;
+      });
+      setLocalOpensValues(values);
+    }, [opensBarEntries]);
 
-    const handleChange = (e) => {
-      setLocalValue(e.target.value);
+    // Calculate Total ECs Opened = sum of all bar chart values
+    useEffect(() => {
+      const totalECsOpened = opensBarEntries.reduce((sum, entry) => {
+        const value = parseFloat(entry.value) || 0;
+        return sum + value;
+      }, 0);
+      const roundedTotal = Math.round(totalECsOpened).toString();
+
+      if (roundedTotal !== pocOpensFormData.totalECsOpened) {
+        handlePocOpensNumberChange('totalECsOpened', roundedTotal);
+      }
+    }, [opensBarEntries, handlePocOpensNumberChange]);
+
+    // Calculate EC Open Ratio = (Total ECs Opened / Total Delivered) × 100
+    useEffect(() => {
+      const totalECsOpened = parseFloat(pocOpensFormData.totalECsOpened) || 0;
+      const totalDelivered = parseFloat(outboundTotalDelivered) || 0;
+      let calculatedRatio = '0';
+      if (totalDelivered > 0) {
+        calculatedRatio = ((totalECsOpened / totalDelivered) * 100).toFixed(2);
+      }
+
+      if (calculatedRatio !== pocOpensFormData.ecOpenRatio) {
+        handlePocOpensNumberChange('ecOpenRatio', calculatedRatio);
+      }
+    }, [pocOpensFormData.totalECsOpened, outboundTotalDelivered, pocOpensFormData.ecOpenRatio, handlePocOpensNumberChange]);
+
+    const handleOpensValueChange = useCallback((id, value) => {
+      setLocalOpensValues(prev => ({ ...prev, [id]: value }));
+      clearOpensToOutboundError(id);
+      const timeoutId = setTimeout(() => {
+        handleOpensBarEntryChange(id, 'value', value);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }, [handleOpensBarEntryChange, clearOpensToOutboundError]);
+
+    const getRoleTotal = () => {
+      return jobRoleEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
     };
 
-    const handleBlur = () => {
-      onChange(localValue);
+    const getScenarioTotal = () => {
+      return jobScenarioEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
     };
 
     return (
-      <Form.Control
-        type="text"
-        placeholder={placeholder}
-        value={localValue}
-        onChange={handleChange}
-        onBlur={handleBlur}
-        size={size}
-      />
+      <>
+        <Row className="mb-3">
+          <Col md={6}>
+            <Form.Label>Report Title</Form.Label>
+            <input
+              type="text"
+              value={pocOpensFormData.reportTitle}
+              disabled
+              className="form-control form-control-sm"
+              style={{ backgroundColor: '#f5f5f5' }}
+            />
+          </Col>
+          <Col md={6}>
+            <Form.Label>Subtitle</Form.Label>
+            <input
+              type="text"
+              name="reportSubtitle"
+              defaultValue={pocOpensFormData.reportSubtitle}
+              onBlur={(e) => handlePocOpensChange({ target: { name: 'reportSubtitle', value: e.target.value } })}
+              placeholder="Enter subtitle"
+              className="form-control form-control-sm"
+            />
+          </Col>
+        </Row>
+
+        <Row className="mb-3">
+          <Col md={3}>
+            <Form.Label>Total ECs Opened</Form.Label>
+            <Form.Control
+              type="text"
+              value={pocOpensFormData.totalECsOpened}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
+              placeholder="Auto-calculated from bar chart values"
+            />
+            <small className="text-muted">Auto: Sum of all Bar Chart Values</small>
+          </Col>
+          <Col md={3}>
+            <Form.Label>EC Open Ratio %</Form.Label>
+            <Form.Control
+              type="text"
+              value={pocOpensFormData.ecOpenRatio}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
+              placeholder="Auto-calculated"
+            />
+            <small className="text-muted">Auto: (Total ECs Opened / Total Delivered) × 100</small>
+          </Col>
+        </Row>
+
+        {/* Bar Chart Values Table - Date NON-EDITABLE, Value EDITABLE */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Bar Chart Values (PoC Engagement Stats (Opens))</Form.Label>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '45%' }}>Date (Non-Editable - Synced from Outbound)</th>
+                  <th style={{ width: '45%' }}>Value (Editable)</th>
+                  <th style={{ width: '10%' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opensBarEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '45%' }}>
+                      <input
+                        type="text"
+                        value={entry.date ? formatDateForDisplay(entry.date) : ''}
+                        disabled
+                        className="form-control form-control-sm"
+                        style={{ backgroundColor: '#f5f5f5' }}
+                      />
+                    </td>
+                    <td style={{ width: '45%' }}>
+                      <CustomNumberInput
+                        value={localOpensValues[entry.id] !== undefined ? localOpensValues[entry.id] : entry.value}
+                        onChange={(value) => handleOpensValueChange(entry.id, value)}
+                        placeholder="Enter value"
+                      />
+                      {opensToOutboundError[entry.id] && (
+                        <div className="text-danger mt-1" style={{ fontSize: '12px' }}>
+                          {opensToOutboundError[entry.id]}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-center" style={{ width: '10%' }}>
+                      <span className="text-success">✓ Date Synced from Outbound</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            📅 Date is automatically synced from Daily Pacing Dynamic Data (Non-Editable).
+            ✏️ Values entered here will be summed to calculate Total ECs Opened.
+            ⚠️ Values cannot exceed Outbound values.
+          </small>
+        </Form.Group>
+
+        {/* Open Role Distribution Table */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Open Role Distribution</Form.Label>
+          {opensRoleError && (
+            <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+              {opensRoleError}
+            </Alert>
+          )}
+          <div style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '60%' }}>Role Name (Synced from Outbound - Non-Editable)</th>
+                  <th style={{ width: '40%' }}>Value (%) - Editable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobRoleEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '60%' }}>
+                      <Form.Control
+                        type="text"
+                        value={entry.role || ''}
+                        disabled
+                        style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}
+                        size="sm"
+                      />
+                    </td>
+                    <td style={{ width: '40%' }}>
+                      <CustomNumberInput
+                        value={entry.value}
+                        onChange={(value) => handleJobRoleValueChange(entry.id, value)}
+                        placeholder="Enter percentage"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            Total: {getRoleTotal()}%
+            {getRoleTotal() > 100 && <span className="text-danger"> (Exceeds 100%!)</span>}
+          </small>
+        </Form.Group>
+
+        {/* Job Scenario Distribution Table */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Job Scenario Distribution</Form.Label>
+          {opensScenarioError && (
+            <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+              {opensScenarioError}
+            </Alert>
+          )}
+          <div style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '60%' }}>Scenario Name (Synced from Outbound - Non-Editable)</th>
+                  <th style={{ width: '40%' }}>Value (%) - Editable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobScenarioEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '60%' }}>
+                      <Form.Control
+                        type="text"
+                        value={entry.scenario || ''}
+                        disabled
+                        style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}
+                        size="sm"
+                      />
+                    </td>
+                    <td style={{ width: '40%' }}>
+                      <CustomNumberInput
+                        value={entry.value}
+                        onChange={(value) => handleJobScenarioValueChange(entry.id, value)}
+                        placeholder="Enter percentage"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            Total: {getScenarioTotal()}%
+            {getScenarioTotal() > 100 && <span className="text-danger"> (Exceeds 100%!)</span>}
+          </small>
+        </Form.Group>
+
+        <div className="d-flex gap-3">
+          <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('outbound')}>← Back</Button>
+          <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={savePocOpensData}>💾 Save & Next</Button>
+        </div>
+      </>
     );
   };
 
-  const getGraphData = () => {
-    const validEntries = pacingEntries.filter(entry => entry.date && entry.value);
-    if (validEntries.length === 0) {
-      return { points: '', area: '', maxValue: 2500, values: [], validEntries: [], suggestedHeight: 150 };
+  // PoC Clicks Form Component - Date NON-EDITABLE, Value EDITABLE
+  const PoCClicksFormComponent = ({
+    pocClicksFormData,
+    handlePocClicksChange,
+    handlePocClicksNumberChange,
+    clicksBarEntries,
+    handleClicksBarEntryChange,
+    savePocClicksData,
+    setActiveTab,
+    formatDateForDisplay,
+    outboundTotalDelivered,
+    pocOpensTotalECsOpened,
+    jobRoleEntries,
+    jobScenarioEntries,
+    handleJobRoleValueChange,
+    handleJobScenarioValueChange,
+    clicksToOpensError,
+    clearClicksToOpensError,
+    clicksRoleError,
+    clicksScenarioError
+  }) => {
+    const [localClicksValues, setLocalClicksValues] = useState({});
+
+    useEffect(() => {
+      const values = {};
+      clicksBarEntries.forEach(entry => {
+        values[entry.id] = entry.value;
+      });
+      setLocalClicksValues(values);
+    }, [clicksBarEntries]);
+
+    // Calculate Total ECs Clicked = sum of all bar chart values
+    useEffect(() => {
+      const totalECsClicked = clicksBarEntries.reduce((sum, entry) => {
+        const value = parseFloat(entry.value) || 0;
+        return sum + value;
+      }, 0);
+      const roundedTotal = Math.round(totalECsClicked).toString();
+
+      if (roundedTotal !== pocClicksFormData.totalECsClicked) {
+        handlePocClicksNumberChange('totalECsClicked', roundedTotal);
+      }
+    }, [clicksBarEntries, handlePocClicksNumberChange]);
+
+    // Calculate EC Click Ratio % = (Total ECs Clicked / Total ECs Opened) × 100
+    useEffect(() => {
+      const totalECsClicked = parseFloat(pocClicksFormData.totalECsClicked) || 0;
+      const totalECsOpened = parseFloat(pocOpensTotalECsOpened) || 0;
+      let calculatedRatio = '0';
+      if (totalECsOpened > 0) {
+        calculatedRatio = ((totalECsClicked / totalECsOpened) * 100).toFixed(2);
+      }
+
+      if (calculatedRatio !== pocClicksFormData.ecClickRatio) {
+        handlePocClicksNumberChange('ecClickRatio', calculatedRatio);
+      }
+    }, [pocClicksFormData.totalECsClicked, pocOpensTotalECsOpened, pocClicksFormData.ecClickRatio, handlePocClicksNumberChange]);
+
+    const handleClicksValueChange = useCallback((id, value) => {
+      setLocalClicksValues(prev => ({ ...prev, [id]: value }));
+      clearClicksToOpensError(id);
+      const timeoutId = setTimeout(() => {
+        handleClicksBarEntryChange(id, 'value', value);
+      }, 300);
+      return () => clearTimeout(timeoutId);
+    }, [handleClicksBarEntryChange, clearClicksToOpensError]);
+
+    const getRoleTotal = () => {
+      return jobRoleEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
+    };
+
+    const getScenarioTotal = () => {
+      return jobScenarioEntries.reduce((sum, entry) => sum + (parseFloat(entry.value) || 0), 0);
+    };
+
+    return (
+      <>
+        <Row className="mb-3">
+          <Col md={6}>
+            <Form.Label>Report Title</Form.Label>
+            <input
+              type="text"
+              value={pocClicksFormData.reportTitle}
+              disabled
+              className="form-control form-control-sm"
+              style={{ backgroundColor: '#f5f5f5' }}
+            />
+          </Col>
+          <Col md={6}>
+            <Form.Label>Subtitle</Form.Label>
+            <input
+              type="text"
+              name="reportSubtitle"
+              defaultValue={pocClicksFormData.reportSubtitle}
+              onBlur={(e) => handlePocClicksChange({ target: { name: 'reportSubtitle', value: e.target.value } })}
+              placeholder="Enter subtitle"
+              className="form-control form-control-sm"
+            />
+          </Col>
+        </Row>
+
+        <Row className="mb-3">
+          <Col md={3}>
+            <Form.Label>Total ECs Clicked</Form.Label>
+            <Form.Control
+              type="text"
+              value={pocClicksFormData.totalECsClicked}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
+              placeholder="Auto-calculated from bar chart values"
+            />
+            <small className="text-muted">Auto: Sum of all Bar Chart Values</small>
+          </Col>
+          <Col md={3}>
+            <Form.Label>EC Click Ratio %</Form.Label>
+            <Form.Control
+              type="text"
+              value={pocClicksFormData.ecClickRatio}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
+              placeholder="Auto-calculated"
+            />
+            <small className="text-muted">Auto: (Total ECs Clicked / Total ECs Opened) × 100</small>
+          </Col>
+        </Row>
+
+        {/* Bar Chart Values Table - Date NON-EDITABLE, Value EDITABLE */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Bar Chart Values (PoC Engagement Stats (Clicks))</Form.Label>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '45%' }}>Date (Non-Editable - Synced from Opens)</th>
+                  <th style={{ width: '45%' }}>Value (Editable)</th>
+                  <th style={{ width: '10%' }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clicksBarEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '45%' }}>
+                      <input
+                        type="text"
+                        value={entry.date ? formatDateForDisplay(entry.date) : ''}
+                        disabled
+                        className="form-control form-control-sm"
+                        style={{ backgroundColor: '#f5f5f5' }}
+                      />
+                    </td>
+                    <td style={{ width: '45%' }}>
+                      <CustomNumberInput
+                        value={localClicksValues[entry.id] !== undefined ? localClicksValues[entry.id] : entry.value}
+                        onChange={(value) => handleClicksValueChange(entry.id, value)}
+                        placeholder="Enter value"
+                      />
+                      {clicksToOpensError[entry.id] && (
+                        <div className="text-danger mt-1" style={{ fontSize: '12px' }}>
+                          {clicksToOpensError[entry.id]}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-center" style={{ width: '10%' }}>
+                      <span className="text-success">✓ Date Synced from Opens</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            📅 Date is automatically synced from PoC Opens tab (Non-Editable).
+            ✏️ Values entered here will be summed to calculate Total ECs Clicked.
+            ⚠️ Values cannot exceed Opens values.
+          </small>
+        </Form.Group>
+
+        {/* Click Role Distribution Table */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Click Role Distribution</Form.Label>
+          {clicksRoleError && (
+            <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+              {clicksRoleError}
+            </Alert>
+          )}
+          <div style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '60%' }}>Role Name (Synced from Outbound - Non-Editable)</th>
+                  <th style={{ width: '40%' }}>Value (%) - Editable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobRoleEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '60%' }}>
+                      <Form.Control
+                        type="text"
+                        value={entry.role || ''}
+                        disabled
+                        style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}
+                        size="sm"
+                      />
+                    </td>
+                    <td style={{ width: '40%' }}>
+                      <CustomNumberInput
+                        value={entry.value}
+                        onChange={(value) => handleJobRoleValueChange(entry.id, value)}
+                        placeholder="Enter percentage"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            Total: {getRoleTotal()}%
+            {getRoleTotal() > 100 && <span className="text-danger"> (Exceeds 100%!)</span>}
+          </small>
+        </Form.Group>
+
+        {/* Job Scenario Distribution Table */}
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Job Scenario Distribution</Form.Label>
+          {clicksScenarioError && (
+            <Alert variant="danger" className="mb-2 py-1" style={{ fontSize: '12px' }}>
+              {clicksScenarioError}
+            </Alert>
+          )}
+          <div style={{ border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '60%' }}>Scenario Name (Synced from Outbound - Non-Editable)</th>
+                  <th style={{ width: '40%' }}>Value (%) - Editable</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobScenarioEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '60%' }}>
+                      <Form.Control
+                        type="text"
+                        value={entry.scenario || ''}
+                        disabled
+                        style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}
+                        size="sm"
+                      />
+                    </td>
+                    <td style={{ width: '40%' }}>
+                      <CustomNumberInput
+                        value={entry.value}
+                        onChange={(value) => handleJobScenarioValueChange(entry.id, value)}
+                        placeholder="Enter percentage"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+          <small className="text-muted mt-2 d-block">
+            Total: {getScenarioTotal()}%
+            {getScenarioTotal() > 100 && <span className="text-danger"> (Exceeds 100%!)</span>}
+          </small>
+        </Form.Group>
+
+        <div className="d-flex gap-3">
+          <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('poc-opens')}>← Back</Button>
+          <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={savePocClicksData}>💾 Save & Next</Button>
+        </div>
+      </>
+    );
+  };
+
+  const savePocOpensData = () => {
+    if (Object.keys(opensToOutboundError).length > 0) {
+      setPocOpensValidationMessage('❌ Please fix all validation errors (Opens value cannot exceed Outbound value) before saving.');
+      return;
+    }
+    if (opensRoleError) {
+      setPocOpensValidationMessage(opensRoleError);
+      return;
+    }
+    if (opensScenarioError) {
+      setPocOpensValidationMessage(opensScenarioError);
+      return;
+    }
+    if (!validatePocOpensForm()) {
+      return;
     }
 
-    const values = validEntries.map(entry => parseFloat(entry.value) || 0);
-    const max = Math.max(...values, 2500);
-
-    // Dynamic height based on max value (more height for larger values)
-    let suggestedHeight = 150;
-    if (max > 5000) suggestedHeight = 200;
-    if (max > 10000) suggestedHeight = 250;
-    if (max > 20000) suggestedHeight = 300;
-
-    const w = 550;
-    const h = suggestedHeight;
-    const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
-    const points = values.map((v, i) => `${i * xStep},${h - (v / max * h)}`).join(' ');
-    const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / max * h)}`).join(' ');
-    return { points, area: `0,${h} ${areaPoints} ${w},${h}`, maxValue: max, values, validEntries, suggestedHeight };
+    const dataToSave = {
+      formData: pocOpensFormData,
+      barEntries: opensBarEntries,
+      jobRoleEntries: opensJobRoleEntries,
+      jobScenarioEntries: opensJobScenarioEntries,
+      savedAt: new Date().toISOString()
+    };
+    setPocOpensData(dataToSave);
+    setIsPocOpensSaved(true);
+    setPocOpensSaveMessage('PoC Opens data saved successfully!');
+    setTimeout(() => setPocOpensSaveMessage(''), 3000);
+    setActiveTab('poc-clicks');
   };
 
-  const graphData = getGraphData();
+  const savePocClicksData = () => {
+    if (Object.keys(clicksToOpensError).length > 0) {
+      setPocClicksValidationMessage('❌ Please fix all validation errors (Clicks value cannot exceed Opens value) before saving.');
+      return;
+    }
+    if (clicksRoleError) {
+      setPocClicksValidationMessage(clicksRoleError);
+      return;
+    }
+    if (clicksScenarioError) {
+      setPocClicksValidationMessage(clicksScenarioError);
+      return;
+    }
+    if (!validatePocClicksForm()) {
+      return;
+    }
+    const dataToSave = {
+      formData: pocClicksFormData,
+      barEntries: clicksBarEntries,
+      jobRoleEntries: clicksJobRoleEntries,
+      jobScenarioEntries: clicksJobScenarioEntries,
+      savedAt: new Date().toISOString()
+    };
+    setPocClicksData(dataToSave);
+    setIsPocClicksSaved(true);
+    setPocClicksSaveMessage('PoC Clicks data saved successfully!');
+    setTimeout(() => setPocClicksSaveMessage(''), 3000);
+    setActiveTab('landing-page');
+  };
 
-  const PieChartWithLabels = () => {
-    const security = parseFloat(outboundFormData.securityPerc) || 0;
-    const safety = parseFloat(outboundFormData.safetyPerc) || 0;
-    const others = parseFloat(outboundFormData.othersPerc) || 0;
+  const LandingPageFormComponent = () => {
+    const [localStateEntries, setLocalStateEntries] = useState(stateEntries);
 
-    const total = security + safety + others;
-    const securityPercent = total > 0 ? (security / total) * 100 : 0;
-    const safetyPercent = total > 0 ? (safety / total) * 100 : 0;
-    const othersPercent = total > 0 ? (others / total) * 100 : 0;
+    useEffect(() => {
+      setLocalStateEntries(stateEntries);
+    }, [stateEntries]);
 
-    const securityAngle = (securityPercent / 100) * 360;
-    const safetyAngle = (safetyPercent / 100) * 360;
-    const othersAngle = (othersPercent / 100) * 360;
+    const handleStateEntryChangeLocal = useCallback((id, field, value) => {
+      setLocalStateEntries(prev => prev.map(entry => entry.id === id ? { ...entry, [field]: value } : entry));
+    }, []);
 
-    const securityMidAngle = securityAngle / 2;
-    const safetyMidAngle = securityAngle + (safetyAngle / 2);
-    const othersMidAngle = securityAngle + safetyAngle + (othersAngle / 2);
+    const handleStateEntryBlur = useCallback((id, field, value) => {
+      handleStateEntryChange(id, field, value);
+    }, [handleStateEntryChange]);
 
-    const getLabelPosition = (midAngle, distance) => {
-      const rad = (midAngle - 90) * Math.PI / 180;
-      return {
-        x: 105 + (distance * Math.cos(rad)),
-        y: 105 + (distance * Math.sin(rad))
-      };
+    const addStateEntryLocal = () => {
+      const newId = Date.now();
+      const newEntry = { id: newId, state: '', value: '' };
+      setLocalStateEntries(prev => [...prev, newEntry]);
+      addStateEntry();
     };
 
-    const securityLabelPos = getLabelPosition(securityMidAngle, 115);
-    const safetyLabelPos = getLabelPosition(safetyMidAngle, 115);
-    const othersLabelPos = getLabelPosition(othersMidAngle, 115);
-
-    const createPieSegment = (startAngle, angle) => {
-      if (angle <= 0 || isNaN(angle) || isNaN(startAngle)) {
-        return '';
+    const removeStateEntryLocal = (id) => {
+      if (localStateEntries.length > 1) {
+        setLocalStateEntries(prev => prev.filter(entry => entry.id !== id));
+        removeStateEntry(id);
       }
-      const endAngle = startAngle + angle;
-      const startRad = (startAngle - 90) * Math.PI / 180;
-      const endRad = (endAngle - 90) * Math.PI / 180;
-      const x1 = 105 + 80 * Math.cos(startRad);
-      const y1 = 105 + 80 * Math.sin(startRad);
-      const x2 = 105 + 80 * Math.cos(endRad);
-      const y2 = 105 + 80 * Math.sin(endRad);
-      const largeArc = angle > 180 ? 1 : 0;
-      return `M 105,105 L ${x1},${y1} A 80,80 0 ${largeArc},1 ${x2},${y2} Z`;
     };
 
     return (
-      <div style={{ position: 'relative', width: '300px', height: '300px', margin: '0 auto' }}>
-        <svg width="300" height="300" viewBox="0 0 210 210">
-          {securityAngle > 0 && <path d={createPieSegment(0, securityAngle)} fill="#7d8bb1" stroke="white" strokeWidth="2" />}
-          {safetyAngle > 0 && <path d={createPieSegment(securityAngle, safetyAngle)} fill="#a2bad0" stroke="white" strokeWidth="2" />}
-          {othersAngle > 0 && <path d={createPieSegment(securityAngle + safetyAngle, othersAngle)} fill="#d1eef4" stroke="white" strokeWidth="2" />}
-          <circle cx="105" cy="105" r="35" fill="#fdfbf2" />
-        </svg>
+      <>
+        <Row className="mb-3">
+          <Col md={12}>
+            <Form.Label>Report Title</Form.Label>
+            <input
+              type="text"
+              value={landingPageFormData.reportTitle}
+              disabled
+              className="form-control form-control-sm"
+              style={{ backgroundColor: '#f5f5f5' }}
+            />
+            <small className="text-muted">Auto-synced from Outbound tab</small>
+          </Col>
+        </Row>
+        <Row className="mb-3">
+          <Col md={12}>
+            <Form.Label>Subtitle</Form.Label>
+            <input
+              type="text"
+              name="reportSubtitle"
+              defaultValue={landingPageFormData.reportSubtitle}
+              onBlur={(e) => handleLandingPageChange({ target: { name: 'reportSubtitle', value: e.target.value } })}
+              placeholder="Enter subtitle"
+              className="form-control form-control-sm"
+            />
+            <small className="text-muted">Editable subtitle for this tab</small>
+          </Col>
+        </Row>
+        <Row className="mb-3">
+          <Col md={3}>
+            <Form.Label>Total Users</Form.Label>
+            <CustomNumberInput
+              value={landingPageFormData.totalUsers}
+              onChange={(value) => handleLandingPageNumberChange('totalUsers', value)}
+              placeholder="e.g. 209"
+            />
+          </Col>
+          <Col md={3}>
+            <Form.Label>Avg. Session</Form.Label>
+            <CustomNumberInput
+              value={landingPageFormData.avgSession}
+              onChange={(value) => handleLandingPageNumberChange('avgSession', value)}
+              placeholder="e.g. 50s"
+            />
+          </Col>
+          <Col md={3}>
+            <Form.Label>Bounced Users</Form.Label>
+            <CustomNumberInput
+              value={landingPageFormData.bouncedUsers}
+              onChange={(value) => handleLandingPageNumberChange('bouncedUsers', value)}
+              placeholder="e.g. 149"
+            />
+          </Col>
+          <Col md={3}>
+            <Form.Label>Form Downloads</Form.Label>
+            <CustomNumberInput
+              value={landingPageFormData.formDownloads}
+              onChange={(value) => handleLandingPageNumberChange('formDownloads', value)}
+              placeholder="e.g. 60"
+            />
+          </Col>
+        </Row>
+        <Row className="mb-3">
+          <Col md={3}>
+            <Form.Label>Bounce Rate %</Form.Label>
+            <Form.Control
+              type="text"
+              value={landingPageFormData.bounceRate}
+              disabled
+              style={{ backgroundColor: '#f5f5f5' }}
+              placeholder="Auto-calculated"
+            />
+            <small className="text-muted">Auto: (Bounced Users / Total Users) × 100</small>
+          </Col>
+        </Row>
 
-        {!isNaN(securityLabelPos.x) && !isNaN(securityLabelPos.y) && (
-          <div style={{ position: 'absolute', left: `${(securityLabelPos.x / 210) * 300}px`, top: `${(securityLabelPos.y / 210) * 300 - 12}px`, transform: 'translate(-50%, -50%)', backgroundColor: 'white', padding: '4px 10px', borderRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 'bold', color: '#333', border: '1px solid #e0e0e0' }}>
-            Security {securityPercent.toFixed(1)}%
+        <Form.Group className="mb-4">
+          <Form.Label className="fw-bold">Audience Location Overview (For Bar Chart)</Form.Label>
+          <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
+            <Table responsive bordered size="sm">
+              <thead>
+                <tr>
+                  <th style={{ width: '70%' }}>State/Region</th>
+                  <th style={{ width: '20%' }}>Value (Users/Count)</th>
+                  <th style={{ width: '10%' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {localStateEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td style={{ width: '70%' }}>
+                      <input
+                        type="text"
+                        value={entry.state}
+                        onChange={(e) => handleStateEntryChangeLocal(entry.id, 'state', e.target.value)}
+                        onBlur={(e) => handleStateEntryBlur(entry.id, 'state', e.target.value)}
+                        placeholder="e.g. FL, OK, NY"
+                        className="form-control form-control-sm"
+                        autoComplete="off"
+                      />
+                    </td>
+                    <td style={{ width: '20%' }}>
+                      <input
+                        type="text"
+                        value={entry.value}
+                        onChange={(e) => handleStateEntryChangeLocal(entry.id, 'value', e.target.value)}
+                        onBlur={(e) => handleStateEntryBlur(entry.id, 'value', e.target.value)}
+                        placeholder="e.g. 45"
+                        className="form-control form-control-sm"
+                        autoComplete="off"
+                      />
+                    </td>
+                    <td className="text-center" style={{ width: '10%' }}>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => removeStateEntryLocal(entry.id)}
+                        disabled={localStateEntries.length === 1}
+                      >
+                        ×
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
           </div>
-        )}
-        {!isNaN(safetyLabelPos.x) && !isNaN(safetyLabelPos.y) && (
-          <div style={{ position: 'absolute', left: `${(safetyLabelPos.x / 210) * 300}px`, top: `${(safetyLabelPos.y / 210) * 300 - 12}px`, transform: 'translate(-50%, -50%)', backgroundColor: 'white', padding: '4px 10px', borderRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 'bold', color: '#333', border: '1px solid #e0e0e0' }}>
-            Safety {safetyPercent.toFixed(1)}%
-          </div>
-        )}
-        {!isNaN(othersLabelPos.x) && !isNaN(othersLabelPos.y) && (
-          <div style={{ position: 'absolute', left: `${(othersLabelPos.x / 210) * 300}px`, top: `${(othersLabelPos.y / 210) * 300 - 12}px`, transform: 'translate(-50%, -50%)', backgroundColor: 'white', padding: '4px 10px', borderRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', whiteSpace: 'nowrap', fontSize: '11px', fontWeight: 'bold', color: '#333', border: '1px solid #e0e0e0' }}>
-            Others {othersPercent.toFixed(1)}%
-          </div>
-        )}
-      </div>
+          <Button
+            variant="outline-primary"
+            size="sm"
+            onClick={addStateEntryLocal}
+            className="mt-2"
+            style={{ width: '100%' }}
+          >
+            + Add New Location
+          </Button>
+        </Form.Group>
+
+        <div className="d-flex gap-3">
+          <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('poc-clicks')}>← Back</Button>
+          <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={saveLandingPageData}>💾 Save & Next</Button>
+        </div>
+      </>
     );
   };
 
-  const BounceRateGauge = () => {
-    const bounceRate = parseFloat(outboundFormData.bounceRate) || 0;
-    const maxBounce = 10;
-    const angle = Math.min(Math.max((bounceRate / maxBounce) * 180, 0), 180);
-    const dashoffset = 251 - (bounceRate / maxBounce) * 251;
-
-    return (
-      <div style={{ textAlign: 'center' }}>
-        <svg width="180" height="120" viewBox="0 0 180 120">
-          <path
-            d="M 20 100 A 80 80 0 0 1 160 100"
-            fill="none"
-            stroke="#e0e0e0"
-            strokeWidth="15"
-            strokeLinecap="round"
-          />
-          <path
-            d="M 20 100 A 80 80 0 0 1 160 100"
-            fill="none"
-            stroke="#28a745"
-            strokeWidth="15"
-            strokeLinecap="round"
-            strokeDasharray="251"
-            strokeDashoffset={dashoffset}
-          />
-          <line
-            x1="90"
-            y1="100"
-            x2="90"
-            y2="50"
-            stroke="#28a745"
-            strokeWidth="3"
-            strokeLinecap="round"
-            transform={`rotate(${angle - 90}, 90, 100)`}
-          />
-          <circle cx="90" cy="100" r="8" fill="#28a745" />
-        </svg>
-        <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#444', marginTop: '10px' }}>
-          {bounceRate}%
-        </div>
-      </div>
-    );
-  };
-
-  const PDFStat = ({ label, value, height = '145px' }) => (
-    <div style={{ flex: 1, backgroundColor: '#fff', padding: '20px', textAlign: 'center', height: height, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-      <h5 style={{ color: '#aaa', fontSize: '16px', fontWeight: '400', marginBottom: '8px' }}>{label}</h5>
-      <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#444' }}>{value}</div>
-    </div>
-  );
-
-  const OutboundForm = () => (
-    <>
-      <Row className="mb-3">
-        <Col md={6}><Form.Label>Report Title</Form.Label>
-          <Form.Control name="reportTitle"
-            value={outboundFormData.reportTitle} onChange={handleOutboundChange} />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Start Date</Form.Label>
-          <CustomDatePicker
-            value={outboundFormData.startDate}
-            onChange={(value) => handleOutboundDateChange('startDate', value)}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>End Date</Form.Label>
-          <CustomDatePicker
-            value={outboundFormData.endDate}
-            onChange={(value) => handleOutboundDateChange('endDate', value)}
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={3}>
-          <Form.Label>Total Emails Sent</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.totalEmailsSent}
-            onChange={(value) => handleOutboundNumberChange('totalEmailsSent', value)}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Total Delivered</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.totalEmailsDelivered}
-            onChange={(value) => handleOutboundNumberChange('totalEmailsDelivered', value)}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Avg Sends</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.dailyAvgSends}
-            onChange={(value) => handleOutboundNumberChange('dailyAvgSends', value)}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Hard Bounced</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.totalHardBounced}
-            onChange={(value) => handleOutboundNumberChange('totalHardBounced', value)}
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={2}>
-          <Form.Label>Security %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.securityPerc}
-            onChange={(value) => handleOutboundNumberChange('securityPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Safety %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.safetyPerc}
-            onChange={(value) => handleOutboundNumberChange('safetyPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Others %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.othersPerc}
-            onChange={(value) => handleOutboundNumberChange('othersPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Bounce Rate %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.bounceRate}
-            onChange={(value) => handleOutboundNumberChange('bounceRate', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Managers EC %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.ecManagers}
-            onChange={(value) => handleOutboundNumberChange('ecManagers', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Directors EC %</Form.Label>
-          <CustomNumberInput
-            value={outboundFormData.ecDirectors}
-            onChange={(value) => handleOutboundNumberChange('ecDirectors', value)}
-          />
-        </Col>
-      </Row>
-
-      <Form.Group className="mb-4">
-        <Form.Label className="fw-bold">Daily Pacing Dynamic Data</Form.Label>
-        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
-          <Table responsive bordered size="sm">
-            <thead>
-              <tr>
-                <th style={{ width: '45%' }}>Date</th>
-                <th style={{ width: '45%' }}>Value</th>
-                <th style={{ width: '10%' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pacingEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td style={{ width: '45%' }}>
-                    <CustomDatePicker
-                      value={entry.date}
-                      onChange={(value) => handlePacingEntryChange(entry.id, 'date', value)}
-                    />
-                  </td>
-                  <td style={{ width: '45%' }}>
-                    <CustomNumberInput
-                      value={entry.value}
-                      onChange={(value) => handlePacingEntryChange(entry.id, 'value', value)}
-                    />
-                  </td>
-                  <td className="text-center" style={{ width: '10%' }}>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => removePacingEntry(entry.id)}
-                      disabled={pacingEntries.length === 1}
-                    >
-                      ×
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-        <Button
-          variant="outline-primary"
-          size="sm"
-          onClick={addPacingEntry}
-          className="mt-2"
-          style={{ width: '100%' }}
-        >
-          + Add New Entry
-        </Button>
-      </Form.Group>
-
-      <div className="d-flex gap-3">
-        <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={handleBackToCampaign}>Back to Campaign</Button>
-        <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={saveOutboundData}>💾 Save & Next</Button>
-      </div>
-    </>
-  );
-
-  const PoCOpensForm = () => (
-    <>
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Label>Report Title</Form.Label>
-          <Form.Control
-            name="reportTitle"
-            value={pocOpensFormData.reportTitle}
-            onChange={handlePocOpensChange}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Subtitle</Form.Label>
-          <Form.Control
-            name="reportSubtitle"
-            value={pocOpensFormData.reportSubtitle}
-            onChange={handlePocOpensChange}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Total ECs Opened</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.totalECsOpened}
-            onChange={(value) => handlePocOpensNumberChange('totalECsOpened', value)}
-            placeholder="e.g. 1319 or 1,319"
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={2}>
-          <Form.Label>EC Open Ratio %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.ecOpenRatio}
-            onChange={(value) => handlePocOpensNumberChange('ecOpenRatio', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Open Manager %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.openManager}
-            onChange={(value) => handlePocOpensNumberChange('openManager', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Open Director %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.openDirector}
-            onChange={(value) => handlePocOpensNumberChange('openDirector', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Security %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.securityPerc}
-            onChange={(value) => handlePocOpensNumberChange('securityPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Safety %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.safetyPerc}
-            onChange={(value) => handlePocOpensNumberChange('safetyPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Others %</Form.Label>
-          <CustomNumberInput
-            value={pocOpensFormData.othersPerc}
-            onChange={(value) => handlePocOpensNumberChange('othersPerc', value)}
-          />
-        </Col>
-      </Row>
-
-      <Form.Group className="mb-4">
-        <Form.Label className="fw-bold">Bar Chart Values (Date & Value)</Form.Label>
-        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
-          <Table responsive bordered size="sm">
-            <thead>
-              <tr>
-                <th style={{ width: '45%' }}>Date</th>
-                <th style={{ width: '45%' }}>Value</th>
-                <th style={{ width: '10%' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {opensBarEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td style={{ width: '45%' }}>
-                    <CustomDatePicker
-                      value={entry.date}
-                      onChange={(value) => handleOpensBarEntryChange(entry.id, 'date', value)}
-                    />
-                  </td>
-                  <td style={{ width: '45%' }}>
-                    <CustomNumberInput
-                      value={entry.value}
-                      onChange={(value) => handleOpensBarEntryChange(entry.id, 'value', value)}
-                    />
-                  </td>
-                  <td className="text-center" style={{ width: '10%' }}>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => removeOpensBarEntry(entry.id)}
-                      disabled={opensBarEntries.length === 1}
-                    >
-                      ×
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-        <Button
-          variant="outline-primary"
-          size="sm"
-          onClick={addOpensBarEntry}
-          className="mt-2"
-          style={{ width: '100%' }}
-        >
-          + Add New Entry
-        </Button>
-      </Form.Group>
-
-      <div className="d-flex gap-3">
-        <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('outbound')}>← Back</Button>
-        <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={savePocOpensData}>💾 Save & Next</Button>
-      </div>
-    </>
-  );
-  const PoCClicksForm = () => (
-    <>
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Label>Report Title</Form.Label>
-          <Form.Control
-            name="reportTitle"
-            value={pocClicksFormData.reportTitle}
-            onChange={handlePocClicksChange}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Subtitle</Form.Label>
-          <Form.Control
-            name="reportSubtitle"
-            value={pocClicksFormData.reportSubtitle}
-            onChange={handlePocClicksChange}
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Total ECs Clicked</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.totalECsClicked}
-            onChange={(value) => handlePocClicksNumberChange('totalECsClicked', value)}
-            placeholder="e.g. 223"
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={2}>
-          <Form.Label>EC Click Ratio %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.ecClickRatio}
-            onChange={(value) => handlePocClicksNumberChange('ecClickRatio', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Clicks Manager %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.clicksManager}
-            onChange={(value) => handlePocClicksNumberChange('clicksManager', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Clicks Director %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.clicksDirector}
-            onChange={(value) => handlePocClicksNumberChange('clicksDirector', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Security %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.securityPerc}
-            onChange={(value) => handlePocClicksNumberChange('securityPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Safety %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.safetyPerc}
-            onChange={(value) => handlePocClicksNumberChange('safetyPerc', value)}
-          />
-        </Col>
-        <Col md={2}>
-          <Form.Label>Others %</Form.Label>
-          <CustomNumberInput
-            value={pocClicksFormData.othersPerc}
-            onChange={(value) => handlePocClicksNumberChange('othersPerc', value)}
-          />
-        </Col>
-      </Row>
-
-      <Form.Group className="mb-4">
-        <Form.Label className="fw-bold">Bar Chart Values (Date & Value)</Form.Label>
-        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
-          <Table responsive bordered size="sm">
-            <thead>
-              <tr>
-                <th style={{ width: '45%' }}>Date</th>
-                <th style={{ width: '45%' }}>Value</th>
-                <th style={{ width: '10%' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clicksBarEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td style={{ width: '45%' }}>
-                    <CustomDatePicker
-                      value={entry.date}
-                      onChange={(value) => handleClicksBarEntryChange(entry.id, 'date', value)}
-                    />
-                  </td>
-                  <td style={{ width: '45%' }}>
-                    <CustomNumberInput
-                      value={entry.value}
-                      onChange={(value) => handleClicksBarEntryChange(entry.id, 'value', value)}
-                    />
-                  </td>
-                  <td className="text-center" style={{ width: '10%' }}>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => removeClicksBarEntry(entry.id)}
-                      disabled={clicksBarEntries.length === 1}
-                    >
-                      ×
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-        <Button
-          variant="outline-primary"
-          size="sm"
-          onClick={addClicksBarEntry}
-          className="mt-2"
-          style={{ width: '100%' }}
-        >
-          + Add New Entry
-        </Button>
-      </Form.Group>
-
-      <div className="d-flex gap-3">
-        <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('poc-opens')}>← Back</Button>
-        <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={savePocClicksData}>💾 Save & Next</Button>
-      </div>
-    </>
-  );
-
-  const LandingPageForm = () => (
+  const WebVitalsFormComponent = () => (
     <>
       <Row className="mb-3">
         <Col md={12}>
           <Form.Label>Report Title</Form.Label>
-          <Form.Control
-            name="reportTitle"
-            value={landingPageFormData.reportTitle}
-            onChange={handleLandingPageChange}
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={3}>
-          <Form.Label>Total Users</Form.Label>
-          <CustomNumberInput
-            value={landingPageFormData.totalUsers}
-            onChange={(value) => handleLandingPageNumberChange('totalUsers', value)}
-            placeholder="e.g. 209"
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Avg. Session</Form.Label>
-          <CustomNumberInput
-            value={landingPageFormData.avgSession}
-            onChange={(value) => handleLandingPageNumberChange('avgSession', value)}
-            placeholder="e.g. 50s"
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Bounced Users</Form.Label>
-          <CustomNumberInput
-            value={landingPageFormData.bouncedUsers}
-            onChange={(value) => handleLandingPageNumberChange('bouncedUsers', value)}
-            placeholder="e.g. 149"
-          />
-        </Col>
-        <Col md={3}>
-          <Form.Label>Form Downloads</Form.Label>
-          <CustomNumberInput
-            value={landingPageFormData.formDownloads}
-            onChange={(value) => handleLandingPageNumberChange('formDownloads', value)}
-            placeholder="e.g. 60"
-          />
-        </Col>
-      </Row>
-      <Row className="mb-3">
-        <Col md={3}>
-          <Form.Label>Bounce Rate %</Form.Label>
-          <CustomNumberInput
-            value={landingPageFormData.bounceRate}
-            onChange={(value) => handleLandingPageNumberChange('bounceRate', value)}
-            placeholder="e.g. 72"
-          />
-        </Col>
-      </Row>
-
-      <Form.Group className="mb-4">
-        <Form.Label className="fw-bold">Audience Location Overview (For Bar Chart)</Form.Label>
-        <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '8px', padding: '10px' }}>
-          <Table responsive bordered size="sm">
-            <thead>
-              <tr>
-                <th style={{ width: '70%' }}>State/Region</th>
-                <th style={{ width: '20%' }}>Value (Users/Count)</th>
-                <th style={{ width: '10%' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stateEntries.map((entry) => (
-                <tr key={entry.id}>
-                  <td style={{ width: '70%' }}>
-                    <CustomTextInput
-                      value={entry.state}
-                      onChange={(newValue) => handleStateEntryChange(entry.id, 'state', newValue)}
-                      placeholder="e.g. FL, OK, NY"
-                    />
-                  </td>
-                  <td style={{ width: '20%' }}>
-                    <CustomNumberInput
-                      value={entry.value}
-                      onChange={(newValue) => handleStateEntryChange(entry.id, 'value', newValue)}
-                      placeholder="e.g. 45"
-                    />
-                  </td>
-                  <td className="text-center" style={{ width: '10%' }}>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => removeStateEntry(entry.id)}
-                      disabled={stateEntries.length === 1}
-                    >
-                      ×
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
-        <Button
-          variant="outline-primary"
-          size="sm"
-          onClick={addStateEntry}
-          className="mt-2"
-          style={{ width: '100%' }}
-        >
-          + Add New Location
-        </Button>
-        <small className="text-muted mt-2 d-block">Add states/regions with their values to display in the bar chart</small>
-      </Form.Group>
-
-      <div className="d-flex gap-3">
-        <Button variant="outline-secondary" size="lg" className="flex-grow-1 fw-bold" onClick={() => setActiveTab('poc-clicks')}>← Back</Button>
-        <Button variant="success" size="lg" className="flex-grow-1 fw-bold" onClick={saveLandingPageData}>💾 Save & Next</Button>
-      </div>
-    </>
-  );
-
-  const WebVitalsForm = () => (
-    <>
-      <Row className="mb-3">
-        <Col md={12}>
-          <Form.Label>Report Title</Form.Label>
-          <Form.Control
-            name="reportTitle"
+          <input
+            type="text"
             value={webVitalsFormData.reportTitle}
-            onChange={handleWebVitalsChange}
+            disabled
+            className="form-control form-control-sm"
+            style={{ backgroundColor: '#f5f5f5' }}
           />
+          <small className="text-muted">Auto-synced from Outbound tab</small>
+        </Col>
+      </Row>
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Label>Subtitle</Form.Label>
+          <input
+            type="text"
+            name="reportSubtitle"
+            defaultValue={webVitalsFormData.reportSubtitle}
+            onBlur={(e) => handleWebVitalsChange({ target: { name: 'reportSubtitle', value: e.target.value } })}
+            placeholder="Enter subtitle"
+            className="form-control form-control-sm"
+          />
+          <small className="text-muted">Editable subtitle for this tab</small>
         </Col>
       </Row>
 
@@ -2891,7 +2206,6 @@ const CampaignReportTabs = () => {
         {screenshotImage && (
           <div className="mt-2">
             <img src={screenshotImage} alt="Preview" style={{ maxHeight: '100px', borderRadius: '4px' }} />
-            <small className="text-muted d-block mt-1">Screenshot will appear in the PDF</small>
           </div>
         )}
       </Form.Group>
@@ -2906,6 +2220,1237 @@ const CampaignReportTabs = () => {
     </>
   );
 
+  const generateCompletePDF = async () => {
+    if (!isOutboundSaved || !isPocOpensSaved || !isPocClicksSaved || !isLandingPageSaved || !isWebVitalsSaved) {
+      alert('Please save all data (Outbound, PoC Opens, PoC Clicks, Landing Page, and Web Page Vitals) before generating PDF!');
+      return;
+    }
+
+    if (!outboundData || !pocOpensData || !pocClicksData || !landingPageData || !webVitalsData) {
+      alert('Some data is missing. Please ensure all sections have been saved.');
+      return;
+    }
+
+    const pdf = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    try {
+      const addPageToPDF = async (elementCreator, pdfDoc, isFirstPage = false) => {
+        const element = elementCreator();
+        document.body.appendChild(element);
+
+        const actualWidth = element.offsetWidth;
+        const actualHeight = element.offsetHeight;
+
+        const pdfWidth = 297;
+        const pdfHeight = 210;
+
+        const scale = pdfWidth / (actualWidth / 3.78);
+        const scaledHeight = (actualHeight / 3.78) * scale;
+
+        const canvas = await html2canvas(element, {
+          scale: 3,
+          useCORS: true,
+          logging: false,
+          allowTaint: false,
+          backgroundColor: '#fdfbf2',
+          windowWidth: actualWidth,
+          windowHeight: actualHeight
+        });
+
+        const imgData = canvas.toDataURL('image/png');
+
+        if (isFirstPage) {
+          pdfDoc.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+        } else {
+          const yOffset = Math.max(0, (pdfHeight - scaledHeight) / 2);
+          pdfDoc.addImage(imgData, 'PNG', 0, yOffset, pdfWidth, scaledHeight);
+        }
+
+        document.body.removeChild(element);
+      };
+
+      await addPageToPDF(createCampaignPage, pdf, true);
+      pdf.addPage();
+      await addPageToPDF(() => createOutboundPageWithDynamicHeight(), pdf, false);
+      pdf.addPage();
+      await addPageToPDF(() => createPocOpensPageWithNoSpacing(), pdf, false);
+      pdf.addPage();
+      await addPageToPDF(() => createPocClicksPageWithNoSpacing(), pdf, false);
+      pdf.addPage();
+      await addPageToPDF(() => createLandingPageWithNoSpacing(), pdf, false);
+      pdf.addPage();
+      await addPageToPDF(createWebVitalsPage, pdf, false);
+
+      pdf.save('Complete_Campaign_Report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('An error occurred while generating the PDF. Please try again.');
+    }
+  };
+
+  const createCampaignPage = () => {
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = '794px';
+    div.style.backgroundColor = '#fdfcf0';
+    div.style.position = 'relative';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = '"Inter", "Helvetica Neue", Arial, sans-serif';
+    div.style.display = 'flex';
+    div.style.overflow = 'hidden';
+
+    // --- Dynamic Date ---
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, '0');
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const year = today.getFullYear();
+    const formattedDate = `${day}/${month}/${year}`;
+
+    // --- Image URLs ---
+    const bookCoverUrl = "https://picsum.photos/seed/report/300/400";
+    // Aapka provided Logo URL
+    const logoUrl = "https://media.licdn.com/dms/image/v2/D4D0BAQF8tBleLHtOoA/company-logo_200_200/B4DZhxnf90HYAI-/0/1754252837229/b2bindemand_logo?e=2147483647&v=beta&t=qo2BaNcIxWJCCOsYwA-iI5KcaCvz5-3OCiRLl65oENQ";
+
+    div.innerHTML = `
+    <div style="width: 240px; height: 100%; background: #ffffff; position: relative; display: flex; align-items: center; justify-content: flex-end;">
+      <img src="${bookCoverUrl}" 
+           alt="Cover" 
+           style="width: 280px; height: 400px; object-fit: cover; z-index: 5; transform: translateX(140px); box-shadow: -15px 15px 35px rgba(0,0,0,0.2); border-radius: 4px;"
+           onerror="this.style.backgroundColor='#4db69f'; this.alt='Cover Load Failed';" />
+    </div>
+
+    <div style="flex: 1; padding: 60px 80px; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+      
+      <div style="display: flex; flex-direction: column; align-items: flex-end;">
+        <img src="${logoUrl}" 
+             alt="Ventes Logo" 
+             style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 5px;" 
+             onerror="this.style.display='none';" />
+        <div style="color: #4db69f; font-weight: bold; font-size: 14px; letter-spacing: 0.5px;">
+           B2B Technologies Inc.
+        </div>
+      </div>
+
+      <div style="margin-top: -20px; padding-left: 100px;">
+        <h1 style="color: #444; font-size: 85px; font-weight: 800; line-height: 0.9; margin: 0; letter-spacing: -3px;">
+          Campaign<br/>Performance<br/>Report
+        </h1>
+        
+        <div style="margin-top: 60px;">
+          <h2 style="color: #555; font-size: 34px; font-weight: 700; margin: 0; line-height: 1.2;">
+            "Bridging the Gap between<br/>Cannabusinesses and Insurers"
+          </h2>
+          <p style="color: #b0b0b0; font-style: italic; font-size: 20px; margin-top: 15px;">
+            Secrets for an impressive and informative talk
+          </p>
+        </div>
+      </div>
+
+      <div style="text-align: right; padding-bottom: 20px;">
+        <p style="color: #444; font-size: 24px; font-weight: 400; margin: 0;">
+          For Team 2X  |  Date ${formattedDate}
+        </p>
+      </div>
+    </div>
+  `;
+
+    return div;
+  };
+
+  const createOutboundPageWithDynamicHeight = () => {
+    const data = outboundData;
+    const formatDate = (date) => {
+      if (!date) return '';
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    };
+
+    const reportTitle = data.formData.reportTitle || 'Campaign Report';
+    const startDate = formatDate(data.formData.startDate);
+    const endDate = formatDate(data.formData.endDate);
+    const dateRange = `${startDate} - ${endDate}`;
+
+    const validEntries = data.pacingEntries.filter(e => e.date && e.value);
+    const values = validEntries.map(entry => parseFloat(entry.value) || 0);
+    const maxValue = Math.max(...values, 2500);
+
+    let graphHeight = 150;
+    if (maxValue > 5000) graphHeight = 200;
+    if (maxValue > 10000) graphHeight = 250;
+    if (maxValue > 20000) graphHeight = 300;
+
+    const w = 550;
+    const h = graphHeight;
+    const xStep = validEntries.length > 1 ? w / (validEntries.length - 1) : 0;
+    const points = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
+    const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
+    const area = `0,${h} ${areaPoints} ${w},${h}`;
+
+    const jobRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
+    let jobRolePieChartHtml = '';
+    if (jobRoleData.length > 0) {
+      const totalValue = jobRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
+
+      let pieSegments = '';
+      let labelsHtml = '';
+      let currentAngle = 0;
+      const centerX = 105;
+      const centerY = 105;
+      const radius = 80;
+
+      jobRoleData.forEach((item, index) => {
+        const value = parseFloat(item.value) || 0;
+        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
+        const angle = (percentage / 100) * 360;
+
+        if (angle > 0) {
+          const startAngle = currentAngle;
+          const endAngle = currentAngle + angle;
+          const startRad = (startAngle - 90) * Math.PI / 180;
+          const endRad = (endAngle - 90) * Math.PI / 180;
+          const x1 = centerX + radius * Math.cos(startRad);
+          const y1 = centerY + radius * Math.sin(startRad);
+          const x2 = centerX + radius * Math.cos(endRad);
+          const y2 = centerY + radius * Math.sin(endRad);
+          const largeArc = angle > 180 ? 1 : 0;
+
+          pieSegments += `<path d="M ${centerX},${centerY} L ${x1},${y1} A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z" fill="${colors[index % colors.length]}" stroke="white" stroke-width="2" />`;
+
+          const midAngle = startAngle + (angle / 2);
+          const labelRad = (midAngle - 90) * Math.PI / 180;
+
+          let labelDistance = radius + 45;
+          if (percentage < 15) labelDistance = radius + 55;
+          if (percentage > 30) labelDistance = radius + 40;
+
+          const labelX = centerX + labelDistance * Math.cos(labelRad);
+          const labelY = centerY + labelDistance * Math.sin(labelRad);
+          let textAnchor = 'middle';
+          let xOffset = 0;
+          let yOffset = 0;
+
+          if (midAngle >= 0 && midAngle < 90) {
+            textAnchor = 'start';
+            xOffset = 5;
+            yOffset = -5;
+          } else if (midAngle >= 90 && midAngle < 180) {
+            textAnchor = 'end';
+            xOffset = -5;
+            yOffset = -5;
+          } else if (midAngle >= 180 && midAngle < 270) {
+            textAnchor = 'end';
+            xOffset = -5;
+            yOffset = 5;
+          } else {
+            textAnchor = 'start';
+            xOffset = 5;
+            yOffset = 5;
+          }
+
+          labelsHtml += `
+          <div style="position: absolute; left: ${labelX + xOffset}px; top: ${labelY + yOffset}px; transform: translate(${textAnchor === 'middle' ? '-50%' : (textAnchor === 'start' ? '0%' : '-100%')}, -50%); background: white; padding: 6px 12px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; font-size: 12px; font-weight: 600; color: #333; border: 1px solid #e0e0e0; z-index: 10;">
+            ${item.role}: ${percentage.toFixed(1)}%
+          </div>
+        `;
+        }
+        currentAngle += angle;
+      });
+
+      jobRolePieChartHtml = `
+      <div style="margin-top: 20px; width: 100%; page-break-inside: avoid;">
+        <div style="background-color: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <h4 style="color: #444; margin-bottom: 20px; text-align: center; font-size: 18px; font-weight: 600;">Job Role Distribution</h4>
+          <div style="position: relative; width: 100%; min-height: 320px; display: flex; justify-content: center;">
+            <div style="position: relative; width: 300px; height: 300px;">
+              <svg width="300" height="300" viewBox="0 0 210 210" style="display: block; margin: 0 auto;">
+                ${pieSegments}
+                <circle cx="${centerX}" cy="${centerY}" r="35" fill="#fdfbf2" />
+              </svg>
+              ${labelsHtml}
+            </div>
+          </div>
+          <div style="margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; padding-top: 10px; border-top: 1px solid #f0f0f0;">
+            ${jobRoleData.map((item, idx) => {
+        const percentage = ((parseFloat(item.value) || 0) / totalValue * 100).toFixed(1);
+        return `
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="width: 12px; height: 12px; background-color: ${colors[idx % colors.length]}; border-radius: 3px;"></div>
+                  <span style="font-size: 12px; color: #555;"><strong>${item.role}</strong>: ${percentage}%</span>
+                </div>
+              `;
+      }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+    } else {
+      jobRolePieChartHtml = `
+      <div style="margin-top: 20px; width: 100%;">
+        <div style="background-color: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center;">
+          <h4 style="color: #444; margin-bottom: 20px;">Job Role Distribution</h4>
+          <p style="color: #999;">No role distribution data available</p>
+        </div>
+      </div>
+    `;
+    }
+
+    const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
+    let jobScenarioCardsHtml = '';
+    if (jobScenarioData.length > 0) {
+      jobScenarioCardsHtml = `
+      <div style="display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap;">
+        ${jobScenarioData.map(item => `
+          <div style="flex: 1; min-width: 120px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa; font-size: 16px; font-weight: 400; margin-bottom: 8px;">${item.scenario}</h5>
+            <div style="font-size: 48px; font-weight: bold; color: #444;">${item.value}%</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    } else {
+      jobScenarioCardsHtml = `
+      <div style="margin-top: 20px; text-align: center; padding: 20px; background: #fff; border-radius: 8px;">
+        <p style="color: #999;">No scenario distribution data available</p>
+      </div>
+    `;
+    }
+
+    const bounceRate = parseFloat(data.formData.bounceRate) || 0;
+    const maxBounce = 100;
+    const radius = 80;
+    const circumference = 2 * Math.PI * radius; // 502.65
+    const strokeDashoffset = circumference * (1 - (bounceRate / maxBounce));
+
+    // Alternative simpler calculation
+    const bouncePercentage = Math.min(bounceRate, 100);
+    const dashOffsetValue = 251 * (1 - (bouncePercentage / 100)); // 251 is for 80 radius
+
+    // In the div.innerHTML, replace the Bounce Rate SVG section with:
+
+    const dateLabels = validEntries.map(entry => {
+      const formattedDate = entry.date ? formatDate(entry.date) : '';
+      const shortDate = formattedDate.split('/').slice(0, 2).join('/');
+      return `<span style="text-align: center; flex: 1; font-size: ${validEntries.length > 7 ? '8px' : '10px'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${shortDate}</span>`;
+    }).join('');
+
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.height = 'auto';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    div.innerHTML = `
+    <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <h1 style="color: #fff; margin: 0; font-size: 36px; font-weight: 400;">${reportTitle}</h1>
+        <div style="color: #fff; margin-top: 5px; font-size: 18px; opacity: 0.9;">Outbound Performance</div>
+      </div>
+      <div style="color: #fff; font-size: 16px; opacity: 0.8; text-align: right;">
+        ${dateRange}
+      </div>
+    </div>
+    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+      <div style="width: 330px;">
+        <div style="background-color: #4db69f; color: #fff; padding: 40px 20px; text-align: center; border-radius: 8px;">
+          <h4 style="font-weight: 400; font-size: 24px; margin-bottom: 20px;">Total Emails Sent</h4>
+          <div style="font-size: 80px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
+        </div>
+        ${jobRolePieChartHtml}
+      </div>
+      <div style="flex: 1;">
+        <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Total Delivered</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Daily Avg Sends</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Hard Bounced</h5>
+            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalHardBounced}</div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
+          <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+  <h5 style="color: #aaa;">Bounce Rate</h5>
+  <div style="text-align: center; position: relative;">
+    <svg width="180" height="120" viewBox="0 0 180 120">
+      <!-- Background arc (gray) -->
+      <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
+      <!-- Foreground arc (green) based on bounce rate -->
+      <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#28a745" stroke-width="15" stroke-linecap="round" 
+        stroke-dasharray="251" 
+        stroke-dashoffset="${251 * (1 - (bounceRate / 100))}" />
+      <!-- Needle -->
+      <line x1="90" y1="100" x2="90" y2="50" stroke="#28a745" stroke-width="3" stroke-linecap="round" 
+        transform="rotate(${(bounceRate / 100) * 180 - 90}, 90, 100)" />
+      <!-- Center circle -->
+      <circle cx="90" cy="100" r="8" fill="#28a745" />
+    </svg>
+    <div style="font-size: 48px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
+  </div>
+  <small style="color: #888; font-size: 12px;">0% - Low | 100% - High</small>
+</div>
+          <div style="flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa; text-align: right;">Daily Pacing Dynamic</h5>
+            <div style="display: flex; margin-top: 15px;">
+              <div style="height: ${h}px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; color: #bbb; padding-right: 12px;">
+                <span>${maxValue}</span>
+                <span>${Math.floor(maxValue / 2)}</span>
+                <span>0</span>
+              </div>
+              <div style="flex: 1; border-left: 1px solid #eee; border-bottom: 1px solid #eee;">
+                <svg width="100%" height="${h}" viewBox="0 0 550 ${h}" preserveAspectRatio="none">
+                  <polyline points="${area}" fill="#9bd9cc" fill-opacity="0.4" />
+                  <polyline points="${points}" fill="none" stroke="#4db69f" stroke-width="3" />
+                </svg>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 10px; color: #bbb; font-size: 11px; padding-left: 45px;">
+              ${dateLabels}
+            </div>
+          </div>
+        </div>
+        ${jobScenarioCardsHtml}
+      </div>
+    </div>
+  `;
+    return div;
+  };
+
+  const getDynamicBarChartHeight = (bars) => {
+    if (!bars || bars.length === 0) return 180;
+    const numBars = bars.length;
+    const maxValue = Math.max(...bars.map(b => b.value), 100);
+    let height = 180;
+    if (numBars <= 3) height = 180;
+    else if (numBars <= 5) height = 220;
+    else if (numBars <= 7) height = 280;
+    else height = 340;
+    if (maxValue > 150) height += 30;
+    if (maxValue > 250) height += 40;
+    return Math.min(height, 400);
+  };
+
+  const createPocOpensPageWithNoSpacing = () => {
+    const data = pocOpensData;
+    const outbound = outboundData;
+
+    const reportTitle =
+      outbound?.formData?.reportTitle ||
+      data.formData.reportTitle ||
+      "Campaign Report";
+
+    const formatDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "";
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${d.getFullYear()}`;
+    };
+
+    const dateRange = `${formatDate(outbound?.formData?.startDate)} - ${formatDate(outbound?.formData?.endDate)}`;
+
+    const formatDateForDisplayFn = (dateString) => {
+      const d = new Date(dateString);
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}`;
+    };
+
+    const bars = data.barEntries
+      .filter((e) => e.date && e.value)
+      .map((e) => ({
+        label: formatDateForDisplayFn(e.date),
+        value: parseInt(e.value) || 0,
+      }));
+
+    const maxValue = Math.max(...bars.map((b) => b.value), 1);
+
+    // Calculate dynamic height based on number of bars
+    const getDynamicHeight = () => {
+      const barCount = bars.length;
+      if (barCount <= 3) return 200;
+      if (barCount <= 5) return 280;
+      if (barCount <= 7) return 360;
+      return 440;
+    };
+
+    const containerHeight = getDynamicHeight();
+    const individualBarHeight = Math.max(30, Math.min(45, (containerHeight - 60) / bars.length));
+
+    let barChartHtml = "";
+    if (bars.length > 0) {
+      barChartHtml = bars
+        .map((bar) => {
+          const percentage = (bar.value / maxValue) * 100;
+          return `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div style="width:65px;font-size:11px;color:#555;font-weight:600;text-align:right;">
+            ${bar.label}
+          </div>
+          <div style="flex:1;background:#e6e6e6;height:${individualBarHeight}px;border-radius:8px;">
+            <div style="width:${percentage}%;background:linear-gradient(90deg,#4db69f,#3a8f7c);height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:600;border-radius:8px;">
+              ${bar.value}
+            </div>
+          </div>
+        </div>`;
+        })
+        .join("");
+    } else {
+      barChartHtml = '<div style="text-align:center;padding:40px;color:#999;">No data</div>';
+    }
+
+    // Open Role Distribution Pie Chart
+    const openRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
+    let openRolePieChartHtml = '';
+
+    if (openRoleData.length > 0) {
+      const totalValue = openRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
+
+      let pieSegments = '';
+      let labelsHtml = '';
+      let currentAngle = 0;
+
+      const centerX = 130;
+      const centerY = 130;
+      const radius = 65;
+
+      openRoleData.forEach((item, index) => {
+        const value = parseFloat(item.value) || 0;
+        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
+        const angle = (percentage / 100) * 360;
+
+        if (angle > 0) {
+          const startAngle = currentAngle;
+          const endAngle = currentAngle + angle;
+
+          const startRad = (startAngle - 90) * Math.PI / 180;
+          const endRad = (endAngle - 90) * Math.PI / 180;
+
+          const x1 = centerX + radius * Math.cos(startRad);
+          const y1 = centerY + radius * Math.sin(startRad);
+          const x2 = centerX + radius * Math.cos(endRad);
+          const y2 = centerY + radius * Math.sin(endRad);
+
+          const largeArc = angle > 180 ? 1 : 0;
+
+          pieSegments += `
+        <path d="M ${centerX},${centerY}
+        L ${x1},${y1}
+        A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z"
+        fill="${colors[index % colors.length]}"
+        stroke="white"
+        stroke-width="2" />
+      `;
+
+          const midAngle = startAngle + angle / 2;
+          const labelRad = (midAngle - 90) * Math.PI / 180;
+          const labelDistance = radius + 10;
+          const labelX = centerX + labelDistance * Math.cos(labelRad);
+          const labelY = centerY + labelDistance * Math.sin(labelRad);
+          const textAnchor = labelX > centerX ? 'start' : 'end';
+          const roleName = item.role.length > 14 ? item.role.slice(0, 12) + '..' : item.role;
+
+          labelsHtml += `
+        <text 
+          x="${labelX}" 
+          y="${labelY}" 
+          text-anchor="${textAnchor}" 
+          dominant-baseline="middle"
+          style="font-size:11px; font-weight:600; fill:#333;">
+          ${roleName} (${percentage.toFixed(1)}%)
+        </text>
+      `;
+        }
+
+        currentAngle += angle;
+      });
+
+      openRolePieChartHtml = `
+    <div style="background:#fff;padding:20px 10px;border-radius:14px;overflow:visible;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;">
+        Open Role Distribution
+      </div>
+      <svg width="340" height="340" viewBox="0 0 260 260" 
+        style="margin:auto;display:block;overflow:visible;">
+        ${pieSegments}
+        <circle cx="${centerX}" cy="${centerY}" r="28" fill="#fdfbf2" />
+        ${labelsHtml}
+      </svg>
+    </div>
+  `;
+    } else {
+      openRolePieChartHtml = '<div style="background:#fff;padding:15px;border-radius:14px;text-align:center;color:#999;">No role distribution data</div>';
+    }
+
+    // Get values from Job Scenario Distribution for Manager and Director
+    const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
+
+    const findScenarioValue = (scenarioName) => {
+      const scenario = jobScenarioData.find(
+        item => item.scenario?.toLowerCase() === scenarioName.toLowerCase()
+      );
+      return scenario ? parseFloat(scenario.value) || 0 : 0;
+    };
+
+    const openManagerValue = findScenarioValue('Manager');
+    const openDirectorValue = findScenarioValue('Director');
+
+    const div = document.createElement("div");
+    div.style.width = "1122px";
+    div.style.backgroundColor = "#fdfbf2";
+    div.style.padding = "25px 35px";
+    div.style.fontFamily = "Arial, sans-serif";
+    div.style.display = "flex";
+    div.style.flexDirection = "column";
+
+    const ecOpenRatio = parseFloat(data.formData.ecOpenRatio) || 0;
+    const circumference = 2 * Math.PI * 55;
+    const dashoffset = circumference * (1 - (ecOpenRatio / 100));
+
+    // Calculate the maximum height among left and center sections to align properly
+    const leftSectionHeight = 320 + (openRoleData.length > 0 ? 340 : 100);
+    const centerSectionHeight = 400;
+    const rightSectionDynamicHeight = containerHeight + 80;
+    const maxSectionHeight = Math.max(leftSectionHeight, centerSectionHeight, rightSectionDynamicHeight);
+
+    div.innerHTML = `
+  <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
+    <div>
+      <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
+      <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Opens)</div>
+    </div>
+    <div style="color:#ccc;font-size:13px;">${dateRange}</div>
+  </div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;min-height:${maxSectionHeight}px;">
+    <!-- LEFT SECTION -->
+    <div style="width:320px;display:flex;flex-direction:column;gap:15px;">
+      <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:20px;border-radius:14px;text-align:center;">
+        <div style="font-size:14px;margin-bottom:8px;">Total ECs Opened</div>
+        <div style="font-size:52px;font-weight:bold;">${data.formData.totalECsOpened || 0}</div>
+      </div>
+      ${openRolePieChartHtml}
+    </div>
+
+    <!-- CENTER SECTION -->
+    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:center;">
+      <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Open Ratio</div>
+        <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
+          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#76e5eb" stroke-width="12" 
+            stroke-dasharray="${circumference}" 
+            stroke-dashoffset="${dashoffset}" 
+            stroke-linecap="round" transform="rotate(-90 70 70)" />
+          <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecOpenRatio}%</text>
+        </svg>
+      </div>
+
+      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+        <span style="font-size:13px;color:#777;">Open Manager</span>
+        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openManagerValue}%</span>
+      </div>
+
+      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+        <span style="font-size:13px;color:#777;">Open Director</span>
+        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openDirectorValue}%</span>
+      </div>
+    </div>
+
+    <!-- RIGHT SECTION - Daily Pacing Dynamic with dynamic height and centered vertically -->
+    <div style="flex:1;background:#fff;padding:20px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;">
+      <div style="text-align:center;margin-bottom:10px;">
+        <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
+      </div>
+      <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
+        Synced from Outbound Performance
+      </div>
+      <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
+        ${barChartHtml}
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
+        ${bars.length} entries • Max ${maxValue}
+      </div>
+    </div>
+  </div>
+`;
+
+    return div;
+  };
+
+  const createPocClicksPageWithNoSpacing = () => {
+    const data = pocClicksData;
+    const outbound = outboundData;
+
+    const reportTitle =
+      outbound?.formData?.reportTitle ||
+      data.formData.reportTitle ||
+      "Campaign Report";
+
+    const formatDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "";
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}/${d.getFullYear()}`;
+    };
+
+    const dateRange = `${formatDate(outbound?.formData?.startDate)} - ${formatDate(outbound?.formData?.endDate)}`;
+
+    const formatDateForDisplayFn = (dateString) => {
+      const d = new Date(dateString);
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
+        .toString()
+        .padStart(2, "0")}`;
+    };
+
+    const bars = data.barEntries
+      .filter((e) => e.date && e.value)
+      .map((e) => ({
+        label: formatDateForDisplayFn(e.date),
+        value: parseInt(e.value) || 0,
+      }));
+
+    const maxValue = Math.max(...bars.map((b) => b.value), 1);
+
+    // Calculate dynamic height based on number of bars
+    const getDynamicHeight = () => {
+      const barCount = bars.length;
+      if (barCount <= 3) return 200;
+      if (barCount <= 5) return 280;
+      if (barCount <= 7) return 360;
+      return 440;
+    };
+
+    const containerHeight = getDynamicHeight();
+    const individualBarHeight = Math.max(30, Math.min(45, (containerHeight - 60) / bars.length));
+
+    let barChartHtml = "";
+    if (bars.length > 0) {
+      barChartHtml = bars
+        .map((bar) => {
+          const percentage = (bar.value / maxValue) * 100;
+          return `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div style="width:65px;font-size:11px;color:#555;font-weight:600;text-align:right;">
+            ${bar.label}
+          </div>
+          <div style="flex:1;background:#e6e6e6;height:${individualBarHeight}px;border-radius:8px;">
+            <div style="width:${percentage}%;background:linear-gradient(90deg,#4db69f,#3a8f7c);height:100%;display:flex;align-items:center;justify-content:flex-end;padding-right:10px;color:#fff;font-size:12px;font-weight:600;border-radius:8px;">
+              ${bar.value}
+            </div>
+          </div>
+        </div>`;
+        })
+        .join("");
+    } else {
+      barChartHtml = '<div style="text-align:center;padding:40px;color:#999;">No data</div>';
+    }
+
+    // Click Role Distribution Pie Chart
+    const clickRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
+    let clickRolePieChartHtml = '';
+
+    if (clickRoleData.length > 0) {
+      const totalValue = clickRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
+
+      let pieSegments = '';
+      let labelsHtml = '';
+      let currentAngle = 0;
+
+      const centerX = 130;
+      const centerY = 130;
+      const radius = 65;
+
+      clickRoleData.forEach((item, index) => {
+        const value = parseFloat(item.value) || 0;
+        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
+        const angle = (percentage / 100) * 360;
+
+        if (angle > 0) {
+          const startAngle = currentAngle;
+          const endAngle = currentAngle + angle;
+
+          const startRad = (startAngle - 90) * Math.PI / 180;
+          const endRad = (endAngle - 90) * Math.PI / 180;
+
+          const x1 = centerX + radius * Math.cos(startRad);
+          const y1 = centerY + radius * Math.sin(startRad);
+          const x2 = centerX + radius * Math.cos(endRad);
+          const y2 = centerY + radius * Math.sin(endRad);
+
+          const largeArc = angle > 180 ? 1 : 0;
+
+          pieSegments += `
+        <path d="M ${centerX},${centerY}
+        L ${x1},${y1}
+        A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z"
+        fill="${colors[index % colors.length]}"
+        stroke="white"
+        stroke-width="2" />
+      `;
+
+          const midAngle = startAngle + angle / 2;
+          const labelRad = (midAngle - 90) * Math.PI / 180;
+          const labelDistance = radius + 10;
+          const labelX = centerX + labelDistance * Math.cos(labelRad);
+          const labelY = centerY + labelDistance * Math.sin(labelRad);
+          const textAnchor = labelX > centerX ? 'start' : 'end';
+          const roleName = item.role.length > 14 ? item.role.slice(0, 12) + '..' : item.role;
+
+          labelsHtml += `
+        <text 
+          x="${labelX}" 
+          y="${labelY}" 
+          text-anchor="${textAnchor}" 
+          dominant-baseline="middle"
+          style="font-size:11px; font-weight:600; fill:#333;">
+          ${roleName} (${percentage.toFixed(1)}%)
+        </text>
+      `;
+        }
+
+        currentAngle += angle;
+      });
+
+      clickRolePieChartHtml = `
+    <div style="background:#fff;padding:20px 10px;border-radius:14px;overflow:visible;">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;">
+        Click Role Distribution
+      </div>
+      <svg width="340" height="340" viewBox="0 0 260 260" 
+        style="margin:auto;display:block;overflow:visible;">
+        ${pieSegments}
+        <circle cx="${centerX}" cy="${centerY}" r="28" fill="#fdfbf2" />
+        ${labelsHtml}
+      </svg>
+    </div>
+  `;
+    } else {
+      clickRolePieChartHtml = '<div style="background:#fff;padding:15px;border-radius:14px;text-align:center;color:#999;">No role distribution data</div>';
+    }
+
+    // Get values from Job Scenario Distribution for Manager and Director
+    const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
+
+    const findScenarioValue = (scenarioName) => {
+      const scenario = jobScenarioData.find(
+        item => item.scenario?.toLowerCase() === scenarioName.toLowerCase()
+      );
+      return scenario ? parseFloat(scenario.value) || 0 : 0;
+    };
+
+    const clicksManagerValue = findScenarioValue('Manager');
+    const clicksDirectorValue = findScenarioValue('Director');
+
+    const div = document.createElement("div");
+    div.style.width = "1122px";
+    div.style.backgroundColor = "#fdfbf2";
+    div.style.padding = "25px 35px";
+    div.style.fontFamily = "Arial, sans-serif";
+    div.style.display = "flex";
+    div.style.flexDirection = "column";
+
+    const ecClickRatio = parseFloat(data.formData.ecClickRatio) || 0;
+    const circumference = 2 * Math.PI * 55;
+    const dashoffset = circumference * (1 - (ecClickRatio / 100));
+
+    // Calculate the maximum height among left and center sections to align properly
+    const leftSectionHeight = 320 + (clickRoleData.length > 0 ? 340 : 100);
+    const centerSectionHeight = 400;
+    const rightSectionDynamicHeight = containerHeight + 80;
+    const maxSectionHeight = Math.max(leftSectionHeight, centerSectionHeight, rightSectionDynamicHeight);
+
+    div.innerHTML = `
+  <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
+    <div>
+      <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
+      <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Clicks)</div>
+    </div>
+    <div style="color:#ccc;font-size:13px;">${dateRange}</div>
+  </div>
+
+  <div style="display:flex;gap:20px;align-items:stretch;min-height:${maxSectionHeight}px;">
+    <!-- LEFT SECTION -->
+    <div style="width:320px;display:flex;flex-direction:column;gap:15px;">
+      <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:20px;border-radius:14px;text-align:center;">
+        <div style="font-size:14px;margin-bottom:8px;">Total ECs Clicked</div>
+        <div style="font-size:52px;font-weight:bold;">${data.formData.totalECsClicked || 0}</div>
+      </div>
+      ${clickRolePieChartHtml}
+    </div>
+
+    <!-- CENTER SECTION -->
+    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:center;">
+      <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
+        <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Click Ratio</div>
+        <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
+          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#76e5eb" stroke-width="12" 
+            stroke-dasharray="${circumference}" 
+            stroke-dashoffset="${dashoffset}" 
+            stroke-linecap="round" transform="rotate(-90 70 70)" />
+          <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecClickRatio}%</text>
+        </svg>
+      </div>
+
+      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+        <span style="font-size:13px;color:#777;">Clicks Manager</span>
+        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksManagerValue}%</span>
+      </div>
+
+      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+        <span style="font-size:13px;color:#777;">Clicks Director</span>
+        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksDirectorValue}%</span>
+      </div>
+    </div>
+
+    <!-- RIGHT SECTION - Daily Pacing Dynamic with dynamic height and centered vertically -->
+    <div style="flex:1;background:#fff;padding:20px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;">
+      <div style="text-align:center;margin-bottom:10px;">
+        <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
+      </div>
+      <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
+        Synced from Opens Performance
+      </div>
+      <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
+        ${barChartHtml}
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
+        ${bars.length} entries • Max ${maxValue}
+      </div>
+    </div>
+  </div>
+`;
+
+    return div;
+  };
+
+  const createLandingPageWithNoSpacing = () => {
+    const data = landingPageData;
+    const outbound = outboundData;
+
+    const reportTitle =
+      outbound?.formData?.reportTitle ||
+      data.formData.reportTitle ||
+      "Campaign Report";
+
+    const formatDate = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return "";
+      return `${d.getDate().toString().padStart(2, "0")}/${(
+        d.getMonth() + 1
+      )
+        .toString()
+        .padStart(2, "0")}/${d.getFullYear()}`;
+    };
+
+    const startDate = formatDate(outbound?.formData?.startDate);
+    const endDate = formatDate(outbound?.formData?.endDate);
+    const dateRange = `${startDate} - ${endDate}`;
+
+    /* ================= DATA ================= */
+    const locationData = data.stateEntries
+      .filter((e) => e.state && e.value)
+      .map((e) => ({
+        state: e.state.trim(),
+        value: parseInt(e.value) || 0,
+      }));
+
+    if (locationData.length === 0) {
+      locationData.push({ state: "No Data", value: 10 });
+    }
+
+    const maxValue = Math.max(...locationData.map((d) => d.value), 10);
+
+    /* ================= DYNAMIC HEIGHT ================= */
+    const chartHeight = Math.max(240, locationData.length * 20);
+
+    let chartWidth = 480;
+    if (locationData.length >= 5) chartWidth = 580;
+    if (locationData.length >= 7) chartWidth = 700;
+
+    const barWidth = Math.max(
+      28,
+      Math.min(42, Math.floor((chartWidth - 80) / locationData.length))
+    );
+
+    const startX = 55;
+
+    /* ================= BARS ================= */
+    let barsSvg = "";
+    locationData.forEach((item, i) => {
+      const barHeight = (item.value / maxValue) * (chartHeight - 50);
+
+      const x = startX + i * (barWidth + 18);
+      const y = chartHeight - barHeight + 35;
+
+      barsSvg += `
+      <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="#4db69f" rx="4"/>
+      <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="#2c7a6f" font-weight="bold">
+        ${item.value}
+      </text>
+    `;
+    });
+
+    let xLabels = "";
+    locationData.forEach((item, i) => {
+      const x = startX + i * (barWidth + 18) + barWidth / 2;
+      xLabels += `
+      <text x="${x}" y="${chartHeight + 60}" text-anchor="middle" font-size="11" fill="#555">
+        ${item.state}
+      </text>
+    `;
+    });
+
+    /* ================= BOUNCE ================= */
+    const bouncedUsers = parseFloat(data.formData.bouncedUsers) || 0;
+    const totalUsers = parseFloat(data.formData.totalUsers) || 1;
+
+    const bounceRate = (bouncedUsers / totalUsers) * 100;
+    const normalizedBounced = Math.min(Math.max(bounceRate, 0), 100);
+
+    const dash = 283;
+    const offset = dash * (1 - normalizedBounced / 100);
+
+    /* ================= ROOT ================= */
+    const div = document.createElement("div");
+
+    div.style.width = "1122px";
+    div.style.minHeight = "auto";
+    div.style.padding = "25px 30px 30px";
+    div.style.background = "#fdfbf2";
+    div.style.fontFamily = "Arial";
+
+    /* ================= HTML ================= */
+    div.innerHTML = `
+  
+  <!-- HEADER -->
+  <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;border-radius:8px;margin-bottom:25px;display:flex;justify-content:space-between;">
+    <div>
+      <h1 style="color:#fff;margin:0;font-size:34px;">${reportTitle}</h1>
+      <div style="color:#fff;">Landing Page Performance</div>
+    </div>
+    <div style="color:#fff;">${dateRange}</div>
+  </div>
+
+  <!-- MAIN -->
+  <div style="display:flex;gap:25px;align-items:stretch;">
+
+    <!-- LEFT CHART -->
+    <div style="flex:2;background:#fff;padding:20px;border-radius:16px;">
+
+      <div style="text-align:center;margin-bottom:15px;">
+        <span style="background:#4db69f20;color:#4db69f;padding:5px 14px;border-radius:20px;font-weight:bold;font-size:13px;">
+          📍 AUDIENCE LOCATION OVERVIEW
+        </span>
+      </div>
+
+      <div style="height:${chartHeight + 90}px;">
+        <svg width="100%" height="${chartHeight + 90}" viewBox="0 0 ${chartWidth + 100} ${chartHeight + 90}">
+          
+          <line x1="48" y1="35" x2="48" y2="${chartHeight + 35}" stroke="#ddd"/>
+          <line x1="48" y1="${chartHeight + 35}" x2="${chartWidth + 60}" y2="${chartHeight + 35}" stroke="#ddd"/>
+
+          ${barsSvg}
+          ${xLabels}
+        </svg>
+      </div>
+
+      <div style="text-align:center;color:#aaa;margin-top:10px;font-size:12px;">
+        Total ${locationData.length} locations • Max: ${maxValue} • Total Users: ${totalUsers}
+      </div>
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div style="width:340px;display:flex;flex-direction:column;gap:15px;">
+
+      <!-- GRID -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div style="background:#fff;padding:15px;text-align:center;border-radius:10px;">
+          <div style="font-size:12px;color:#777;">Total Users</div>
+          <div style="font-size:28px;font-weight:bold;">${totalUsers}</div>
+        </div>
+
+        <div style="background:#fff;padding:15px;text-align:center;border-radius:10px;">
+          <div style="font-size:12px;color:#777;">Avg. Session</div>
+          <div style="font-size:28px;font-weight:bold;">${data.formData.avgSession}s</div>
+        </div>
+
+        <div style="background:#fff;padding:15px;text-align:center;border-radius:10px;">
+          <div style="font-size:12px;color:#777;">Bounced Users</div>
+          <div style="font-size:28px;font-weight:bold;">${bouncedUsers}</div>
+        </div>
+
+        <div style="background:#fff;padding:15px;text-align:center;border-radius:10px;">
+          <div style="font-size:12px;color:#777;">Form Downloads</div>
+          <div style="font-size:28px;font-weight:bold;">${data.formData.formDownloads}</div>
+        </div>
+
+      </div>
+
+      <!-- GAUGE -->
+      <div style="background:#fff;padding:18px;border-radius:12px;text-align:center;">
+
+        <div style="font-size:13px;color:#777;margin-bottom:8px;">Bounce Rate</div>
+
+        <svg width="200" height="120" viewBox="0 0 220 140">
+          
+          <path d="M 20 120 A 90 90 0 0 1 200 120"
+            fill="none"
+            stroke="#e0e0e0"
+            stroke-width="14"/>
+
+          <path d="M 20 120 A 90 90 0 0 1 200 120"
+            fill="none"
+            stroke="#4db69f"
+            stroke-width="14"
+            stroke-dasharray="${dash}"
+            stroke-dashoffset="${offset}" />
+
+          <line x1="110" y1="120" x2="110" y2="60"
+            stroke="#333"
+            stroke-width="3"
+            transform="rotate(${(normalizedBounced / 100) * 180 - 90},110,120)" />
+
+          <circle cx="110" cy="120" r="6" fill="#333"/>
+        </svg>
+
+        <div style="font-size:32px;font-weight:bold;">
+          ${normalizedBounced.toFixed(0)}%
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+`;
+
+    return div;
+  };
+
+  const createWebVitalsPage = () => {
+    const data = webVitalsData;
+    const outbound = outboundData;
+
+    const formatDate = (date) => {
+      if (!date) return '';
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return '';
+      return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+    };
+    const startDate = formatDate(outbound?.formData?.startDate);
+    const endDate = formatDate(outbound?.formData?.endDate);
+    const dateRange = `${startDate} - ${endDate}`;
+
+    if (!data || !data.formData) {
+      const div = document.createElement('div');
+      div.style.width = '1122px';
+      div.style.minHeight = '794px';
+      div.style.backgroundColor = '#fdfbf2';
+      div.style.padding = '40px';
+      div.style.boxSizing = 'border-box';
+      div.style.fontFamily = 'Arial, sans-serif';
+      const reportTitle = outbound?.formData?.reportTitle || 'Web Page Vitals';
+      div.innerHTML = `
+        <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h1 style="color: #fff; margin: 0; font-size: 36px; font-weight: 400;">${reportTitle}</h1>
+            <div style="color: #fff; margin-top: 5px; font-size: 18px; opacity: 0.9;">Web Page Vitals</div>
+          </div>
+          <div style="color: #fff; font-size: 16px; opacity: 0.8; text-align: right;">
+            ${dateRange}
+          </div>
+        </div>
+        <div style="text-align: center; padding: 100px; color: #999;">
+          No data available. Please save the Web Vitals data first.
+        </div>
+      `;
+      return div;
+    }
+
+    const reportTitle = outbound?.formData?.reportTitle || data.formData.reportTitle || 'Campaign Report';
+    const div = document.createElement('div');
+    div.style.width = '1122px';
+    div.style.minHeight = '794px';
+    div.style.backgroundColor = '#fdfbf2';
+    div.style.padding = '40px';
+    div.style.boxSizing = 'border-box';
+    div.style.fontFamily = 'Arial, sans-serif';
+
+    let screenshotHtml = '';
+    if (data.screenshotImage && data.screenshotImage !== '') {
+      screenshotHtml = `
+        <div style="background: #fff; padding: 20px; border-radius: 12px; margin-top: 20px;">
+          <div style="text-align: center; background: #f5f5f5; border-radius: 8px; padding: 20px; min-height: 300px; display: flex; align-items: center; justify-content: center;">
+            <img src="${data.screenshotImage}" style="max-width: 100%; max-height: 400px; width: auto; height: auto; object-fit: contain; border-radius: 8px;" alt="Screenshot" />
+          </div>
+        </div>
+      `;
+    } else {
+      screenshotHtml = `
+        <div style="background: #fff; padding: 20px; border-radius: 12px; margin-top: 20px;">
+          <div style="text-align: center; padding: 60px; color: #999; background: #f5f5f5; border-radius: 8px;">
+            No screenshot uploaded
+          </div>
+        </div>
+      `;
+    }
+
+    div.innerHTML = `
+      <div style="background-color: #545454; padding: 18px 40px; border-left: 15px solid #4db69f; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h1 style="color: #fff; margin: 0; font-size: 36px; font-weight: 400;">${reportTitle}</h1>
+          <div style="color: #fff; margin-top: 5px; font-size: 18px; opacity: 0.9;">Web Page Vitals</div>
+        </div>
+        <div style="color: #fff; font-size: 16px; opacity: 0.8; text-align: right;">
+          ${dateRange}
+        </div>
+      </div>
+      
+      <div style="display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap;">
+        <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <h5 style="color: #aaa; font-size: 14px;">Avg. Page Load Speed</h5>
+          <div style="font-size: 40px; font-weight: bold;">${data.formData.avgPageLoadSpeed || '0'}s</div>
+        </div>
+        <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <h5 style="color: #aaa; font-size: 14px;">Structure Metric</h5>
+          <div style="font-size: 40px; font-weight: bold;">${data.formData.structureMetrix || '0'}%</div>
+        </div>
+        <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <h5 style="color: #aaa; font-size: 14px;">Largest Element (LCP)</h5>
+          <div style="font-size: 40px; font-weight: bold;">${data.formData.largestElementLCP || '0'}s</div>
+        </div>
+        <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+          <h5 style="color: #aaa; font-size: 14px;">TBT Script Blocks</h5>
+          <div style="font-size: 40px; font-weight: bold;">${data.formData.tbtScriptBlocks || '0'}MS</div>
+        </div>
+      </div>
+      
+      ${screenshotHtml}
+    `;
+    return div;
+  };
+
   return (
     <div className="vh-100 overflow-hidden d-flex flex-column" style={{ backgroundColor: '#f4f7f6' }}>
       <Container className="py-4 flex-grow-1 overflow-auto">
@@ -2918,95 +3463,153 @@ const CampaignReportTabs = () => {
               <Tab eventKey="outbound" title="Outbound Performance">
                 {outboundSaveMessage && <Alert variant="success" className="mb-3">{outboundSaveMessage}</Alert>}
                 {outboundValidationMessage && <Alert variant="warning" className="mb-3">{outboundValidationMessage}</Alert>}
-                {OutboundForm()}
+                <OutboundForm
+                  outboundFormData={outboundFormData}
+                  handleOutboundChange={handleOutboundChange}
+                  handleOutboundDateChange={handleOutboundDateChange}
+                  handleOutboundNumberChange={handleOutboundNumberChange}
+                  softBounced={softBounced}
+                  setSoftBounced={setSoftBounced}
+                  pacingEntries={pacingEntries}
+                  handlePacingEntryChange={handlePacingEntryChange}
+                  addPacingEntry={addPacingEntry}
+                  removePacingEntry={removePacingEntry}
+                  jobRoleEntries={outboundJobRoleEntries}
+                  handleJobRoleChange={(id, field, value) => {
+                    setOutboundJobRoleEntries(prev => prev.map(entry =>
+                      entry.id === id ? { ...entry, [field]: value } : entry
+                    ));
+                    setIsOutboundSaved(false);
+                  }}
+                  addJobRoleEntry={() => {
+                    setOutboundJobRoleEntries(prev => [...prev, { id: Date.now(), role: '', value: '' }]);
+                    setIsOutboundSaved(false);
+                  }}
+                  removeJobRoleEntry={(id) => {
+                    if (outboundJobRoleEntries.length > 1) {
+                      setOutboundJobRoleEntries(prev => prev.filter(entry => entry.id !== id));
+                      setIsOutboundSaved(false);
+                    }
+                  }}
+                  jobScenarioEntries={outboundJobScenarioEntries}
+                  handleJobScenarioChange={(id, field, value) => {
+                    setOutboundJobScenarioEntries(prev => prev.map(entry =>
+                      entry.id === id ? { ...entry, [field]: value } : entry
+                    ));
+                    setIsOutboundSaved(false);
+                  }}
+                  addJobScenarioEntry={() => {
+                    setOutboundJobScenarioEntries(prev => [...prev, { id: Date.now(), scenario: '', value: '' }]);
+                    setIsOutboundSaved(false);
+                  }}
+                  removeJobScenarioEntry={(id) => {
+                    if (outboundJobScenarioEntries.length > 1) {
+                      setOutboundJobScenarioEntries(prev => prev.filter(entry => entry.id !== id));
+                      setIsOutboundSaved(false);
+                    }
+                  }}
+                  handleBackToCampaign={handleBackToCampaign}
+                  saveOutboundData={saveOutboundData}
+                  outboundValidationError={outboundValidationError}
+                  setOutboundValidationError={setOutboundValidationError}
+                  outboundRoleError={outboundRoleError}
+                  outboundScenarioError={outboundScenarioError}
+                />
               </Tab>
               <Tab eventKey="poc-opens" title="PoC Engagement Stats (Opens)">
-                {pocOpensSaveMessage && <Alert variant="success" className="mb-3">{pocOpensSaveMessage}</Alert>}
-                {pocOpensValidationMessage && <Alert variant="warning" className="mb-3">{pocOpensValidationMessage}</Alert>}
-                {PoCOpensForm()}
+                {activeTab === 'poc-opens' && (
+                  <>
+                    {pocOpensSaveMessage && <Alert variant="success" className="mb-3">{pocOpensSaveMessage}</Alert>}
+                    {pocOpensValidationMessage && <Alert variant="warning" className="mb-3">{pocOpensValidationMessage}</Alert>}
+                    <PoCOpensFormComponent
+                      pocOpensFormData={pocOpensFormData}
+                      handlePocOpensChange={handlePocOpensChange}
+                      handlePocOpensNumberChange={handlePocOpensNumberChange}
+                      opensBarEntries={opensBarEntries}
+                      handleOpensBarEntryChange={handleOpensBarEntryChange}
+                      savePocOpensData={savePocOpensData}
+                      setActiveTab={setActiveTab}
+                      formatDateForDisplay={formatDateForDisplay}
+                      outboundTotalDelivered={outboundFormData.totalEmailsDelivered}
+                      jobRoleEntries={opensJobRoleEntries}
+                      jobScenarioEntries={opensJobScenarioEntries}
+                      handleJobRoleValueChange={(id, value) => {
+                        setOpensJobRoleEntries(prev => prev.map(entry =>
+                          entry.id === id ? { ...entry, value } : entry
+                        ));
+                      }}
+                      handleJobScenarioValueChange={(id, value) => {
+                        setOpensJobScenarioEntries(prev => prev.map(entry =>
+                          entry.id === id ? { ...entry, value } : entry
+                        ));
+                      }}
+                      opensToOutboundError={opensToOutboundError}
+                      clearOpensToOutboundError={clearOpensToOutboundError}
+                      opensRoleError={opensRoleError}
+                      opensScenarioError={opensScenarioError}
+                    />
+                  </>
+                )}
               </Tab>
+
               <Tab eventKey="poc-clicks" title="PoC Engagement Stats (Clicks)">
-                {pocClicksSaveMessage && <Alert variant="success" className="mb-3">{pocClicksSaveMessage}</Alert>}
-                {pocClicksValidationMessage && <Alert variant="warning" className="mb-3">{pocClicksValidationMessage}</Alert>}
-                {PoCClicksForm()}
+                {activeTab === 'poc-clicks' && (
+                  <>
+                    {pocClicksSaveMessage && <Alert variant="success" className="mb-3">{pocClicksSaveMessage}</Alert>}
+                    {pocClicksValidationMessage && <Alert variant="warning" className="mb-3">{pocClicksValidationMessage}</Alert>}
+                    <PoCClicksFormComponent
+                      pocClicksFormData={pocClicksFormData}
+                      handlePocClicksChange={handlePocClicksChange}
+                      handlePocClicksNumberChange={handlePocClicksNumberChange}
+                      clicksBarEntries={clicksBarEntries}
+                      handleClicksBarEntryChange={handleClicksBarEntryChange}
+                      savePocClicksData={savePocClicksData}
+                      setActiveTab={setActiveTab}
+                      formatDateForDisplay={formatDateForDisplay}
+                      outboundTotalDelivered={outboundFormData.totalEmailsDelivered}
+                      pocOpensTotalECsOpened={pocOpensFormData.totalECsOpened}
+                      jobRoleEntries={clicksJobRoleEntries}
+                      jobScenarioEntries={clicksJobScenarioEntries}
+                      handleJobRoleValueChange={(id, value) => {
+                        setClicksJobRoleEntries(prev => prev.map(entry =>
+                          entry.id === id ? { ...entry, value } : entry
+                        ));
+                      }}
+                      handleJobScenarioValueChange={(id, value) => {
+                        setClicksJobScenarioEntries(prev => prev.map(entry =>
+                          entry.id === id ? { ...entry, value } : entry
+                        ));
+                      }}
+                      clicksToOpensError={clicksToOpensError}
+                      clearClicksToOpensError={clearClicksToOpensError}
+                      clicksRoleError={clicksRoleError}
+                      clicksScenarioError={clicksScenarioError}
+                    />
+                  </>
+                )}
               </Tab>
               <Tab eventKey="landing-page" title="Landing Page Performance">
-                {landingPageSaveMessage && <Alert variant="success" className="mb-3">{landingPageSaveMessage}</Alert>}
-                {landingPageValidationMessage && <Alert variant="warning" className="mb-3">{landingPageValidationMessage}</Alert>}
-                {LandingPageForm()}
+                {activeTab === 'landing-page' && (
+                  <>
+                    {landingPageSaveMessage && <Alert variant="success" className="mb-3">{landingPageSaveMessage}</Alert>}
+                    {landingPageValidationMessage && <Alert variant="warning" className="mb-3">{landingPageValidationMessage}</Alert>}
+                    <LandingPageFormComponent />
+                  </>
+                )}
               </Tab>
               <Tab eventKey="web-vitals" title="Web Page Vitals">
-                {webVitalsSaveMessage && <Alert variant="success" className="mb-3">{webVitalsSaveMessage}</Alert>}
-                {webVitalsValidationMessage && <Alert variant="warning" className="mb-3">{webVitalsValidationMessage}</Alert>}
-                {WebVitalsForm()}
+                {activeTab === 'web-vitals' && (
+                  <>
+                    {webVitalsSaveMessage && <Alert variant="success" className="mb-3">{webVitalsSaveMessage}</Alert>}
+                    {webVitalsValidationMessage && <Alert variant="warning" className="mb-3">{webVitalsValidationMessage}</Alert>}
+                    <WebVitalsFormComponent />
+                  </>
+                )}
               </Tab>
             </Tabs>
           </Card.Body>
         </Card>
       </Container>
-
-      {/* Hidden preview for Outbound */}
-      <div style={{ position: 'absolute', left: '-5000px', top: 0 }}>
-        <div style={{ width: '1122px', height: '794px', backgroundColor: '#fdfbf2', padding: '40px', boxSizing: 'border-box', fontFamily: 'Arial, sans-serif' }}>
-          <div style={{ backgroundColor: '#545454', padding: '18px 40px', borderLeft: '15px solid #4db69f', marginBottom: '25px', display: 'flex', alignItems: 'baseline' }}>
-            <h1 style={{ color: '#fff', margin: 0, fontSize: '44px', fontWeight: '400' }}>{outboundFormData.reportTitle}</h1>
-            <span style={{ color: '#fff', marginLeft: '15px', fontSize: '24px', opacity: 0.8 }}>({formatDate(outboundFormData.startDate)} - {formatDate(outboundFormData.endDate)})</span>
-          </div>
-          <div style={{ display: 'flex', gap: '20px' }}>
-            <div style={{ width: '330px' }}>
-              <div style={{ backgroundColor: '#4db69f', color: '#fff', padding: '40px 10px', textAlign: 'center', height: '280px', display: 'flex', flexDirection: 'column', justifyContent: 'center', borderRadius: '8px' }}>
-                <h4 style={{ fontWeight: '400', fontSize: '24px', marginBottom: '20px' }}>Total Emails Sent</h4>
-                <div style={{ fontSize: '80px', fontWeight: 'bold' }}>{outboundFormData.totalEmailsSent}</div>
-              </div>
-              <div style={{ marginTop: '40px', marginBottom: '20px' }}>
-                {PieChartWithLabels()}
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                {PDFStat({ label: 'Total Emails Delivered', value: outboundFormData.totalEmailsDelivered })}
-                {PDFStat({ label: 'Daily Average Sends', value: outboundFormData.dailyAvgSends })}
-                {PDFStat({ label: 'Total Hard Bounced', value: outboundFormData.totalHardBounced })}
-              </div>
-              <div style={{ display: 'flex', gap: '15px' }}>
-                <div style={{ width: '280px', background: '#fff', padding: '20px', textAlign: 'center', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', height: '310px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <h5 style={{ color: '#aaa', marginBottom: '15px', fontSize: '18px' }}>Bounce Rate</h5>
-                  {BounceRateGauge()}
-                </div>
-                <div style={{ flex: 1, backgroundColor: '#fff', padding: '25px', height: '310px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                  <h5 style={{ color: '#aaa', textAlign: 'right', fontSize: '18px' }}>Daily Pacing Dynamic</h5>
-                  <div style={{ display: 'flex', marginTop: '15px' }}>
-                    <div style={{ height: '150px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', fontSize: '12px', color: '#bbb', paddingRight: '12px' }}>
-                      <span>{graphData.maxValue}</span>
-                      <span>{Math.floor(graphData.maxValue / 2)}</span>
-                      <span>0</span>
-                    </div>
-                    <div style={{ flex: 1, borderLeft: '1px solid #eee', borderBottom: '1px solid #eee' }}>
-                      {graphData.validEntries && graphData.validEntries.length > 0 ? (
-                        <svg width="100%" height="150" viewBox="0 0 550 150" preserveAspectRatio="none">
-                          <polyline points={graphData.area} fill="#9bd9cc" fillOpacity="0.4" />
-                          <polyline points={graphData.points} fill="none" stroke="#4db69f" strokeWidth="3" />
-                        </svg>
-                      ) : (
-                        <div style={{ height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>No data to display</div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '10px', color: '#bbb', fontSize: '13px', paddingLeft: '45px' }}>
-                    <span>{graphData.validEntries && graphData.validEntries[0]?.date ? formatDate(graphData.validEntries[0].date) : formatDate(outboundFormData.startDate)}</span>
-                    <span>Daily Timeline</span>
-                    <span>{graphData.validEntries && graphData.validEntries[graphData.validEntries.length - 1]?.date ? formatDate(graphData.validEntries[graphData.validEntries.length - 1].date) : formatDate(outboundFormData.endDate)}</span>
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '15px', marginTop: '15px', marginBottom: '10px' }}>
-                {PDFStat({ label: 'EC Delivered - Managers', value: `${outboundFormData.ecManagers}%`, height: '140px' })}
-                {PDFStat({ label: 'EC Delivered - Directors', value: `${outboundFormData.ecDirectors}%`, height: '140px' })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };
