@@ -836,18 +836,6 @@ const CampaignReportTabs = () => {
     }
   }, [outboundFormData.reportTitle]);
 
-  useEffect(() => {
-    if (outboundFormData.startDate && outboundFormData.endDate) {
-      const formatDateForSubtitle = (date) => {
-        if (!date) return '';
-        const d = new Date(date);
-        return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
-      };
-      const subtitle = `${formatDateForSubtitle(outboundFormData.startDate)} - ${formatDateForSubtitle(outboundFormData.endDate)}`;
-      setPocOpensFormData(prev => prev.reportSubtitle ? prev : ({ ...prev, reportSubtitle: subtitle }));
-      setPocClicksFormData(prev => prev.reportSubtitle ? prev : ({ ...prev, reportSubtitle: subtitle }));
-    }
-  }, [outboundFormData.startDate, outboundFormData.endDate]);
 
   useEffect(() => {
     const totalUsers = parseFloat(landingPageFormData.totalUsers) || 0;
@@ -2847,7 +2835,7 @@ const CampaignReportTabs = () => {
     </div>
 
     <!-- CENTER SECTION -->
-    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:center;">
+    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:flex-start;">
       <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
         <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Open Ratio</div>
         <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
@@ -3097,7 +3085,7 @@ const CampaignReportTabs = () => {
     </div>
 
     <!-- CENTER SECTION -->
-    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:center;">
+    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:flex-start;">
       <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
         <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Click Ratio</div>
         <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
