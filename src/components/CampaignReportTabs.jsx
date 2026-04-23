@@ -2353,8 +2353,8 @@ const CampaignReportTabs = () => {
   const createPieChartWithOutsideLabels = (data, title) => {
     if (!data || data.length === 0) {
       return `
-      <div style="background:#fff;padding:20px;border-radius:16px;text-align:center;">
-        <h4 style="color:#444;margin-bottom:15px;font-size:18px;font-family:sans-serif;">${title}</h4>
+      <div style="background:#fff;padding:20px;border-radius:16px;text-align:center;box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+        <h4 style="color:#444;margin-bottom:15px;font-size:16px;font-family:sans-serif;">${title}</h4>
         <p style="color:#999;font-family:sans-serif;">No data available</p>
       </div>
     `;
@@ -2367,13 +2367,10 @@ const CampaignReportTabs = () => {
     let labelsHtml = '';
     let currentAngle = 0;
 
-    // Adjusted center and increased sizes
     const centerX = 200;
-    const centerY = 150;
-
-    // INCREASED RADII for a larger chart
-    const outerRadius = 100; // Was 75
-    const innerRadius = 60;  // Was 45
+    const centerY = 130;
+    const outerRadius = 75;
+    const innerRadius = 45;
 
     const validData = data.filter(item => (parseFloat(item.value) || 0) > 0);
 
@@ -2386,19 +2383,15 @@ const CampaignReportTabs = () => {
 
       const startAngle = currentAngle;
       const endAngle = currentAngle + angle;
-
       const startRad = (startAngle - 90) * Math.PI / 180;
       const endRad = (endAngle - 90) * Math.PI / 180;
-
       const largeArc = angle > 180 ? 1 : 0;
       const color = colors[index % colors.length];
 
-      // DONUT SHAPE
       const x1Outer = centerX + outerRadius * Math.cos(startRad);
       const y1Outer = centerY + outerRadius * Math.sin(startRad);
       const x2Outer = centerX + outerRadius * Math.cos(endRad);
       const y2Outer = centerY + outerRadius * Math.sin(endRad);
-
       const x1Inner = centerX + innerRadius * Math.cos(startRad);
       const y1Inner = centerY + innerRadius * Math.sin(startRad);
       const x2Inner = centerX + innerRadius * Math.cos(endRad);
@@ -2415,39 +2408,20 @@ const CampaignReportTabs = () => {
       />
     `;
 
-      // ===== LARGER LABELS =====
       const midAngle = startAngle + angle / 2;
       const rad = (midAngle - 90) * Math.PI / 180;
-
-      // Label distance from center
-      const labelRadius = outerRadius + 20;
-
-      let labelX = centerX + labelRadius * Math.cos(rad);
-      let labelY = centerY + labelRadius * Math.sin(rad);
-
+      const labelRadius = outerRadius + 15;
+      const labelX = centerX + labelRadius * Math.cos(rad);
+      const labelY = centerY + labelRadius * Math.sin(rad);
       const isRight = Math.cos(rad) > 0;
       const anchor = isRight ? "start" : "end";
-
-      const padding = 10;
-      const adjustedX = isRight ? labelX + padding : labelX - padding;
-
+      const adjustedX = isRight ? labelX + 8 : labelX - 8;
       const roleName = item.role || item.scenario || '';
 
       labelsHtml += `
-      <text 
-        x="${adjustedX}" 
-        y="${labelY - 2}" 
-        text-anchor="${anchor}"
-        style="font-size:14px; fill:#333; font-weight:700; font-family:sans-serif;">
-        ${roleName}
-      </text>
-
-      <text 
-        x="${adjustedX}" 
-        y="${labelY + 14}" 
-        text-anchor="${anchor}"
-        style="font-size:13px; fill:#666; font-family:sans-serif;">
-        ${percentage.toFixed(0)}%
+      <text x="${adjustedX}" y="${labelY + 4}" text-anchor="${anchor}" style="font-size:12px; fill:#444; font-family:sans-serif;">
+        <tspan style="font-weight:600;">${roleName}</tspan> 
+        <tspan style="fill:#777; font-weight:400;">(${percentage.toFixed(0)}%)</tspan>
       </text>
     `;
 
@@ -2455,22 +2429,11 @@ const CampaignReportTabs = () => {
     });
 
     return `
-    <div style="background:#f4f5f7; padding:30px; border-radius:30px; max-width:450px; margin:auto;">
-      <h4 style="color:#333; text-align:center; font-size:22px; margin-bottom:20px; font-family:sans-serif;">
-        ${title}
-      </h4>
-
-      <svg 
-        width="100%" 
-        height="300" 
-        viewBox="0 0 400 300" 
-        style="display:block; overflow:visible;">
-        
+    <div style="background:#f4f5f7; padding:20px; border-radius:24px; max-width:400px; margin:auto;">
+      <h4 style="color:#333; text-align:center; font-size:18px; margin-bottom:15px; font-family:sans-serif;">${title}</h4>
+      <svg width="100%" height="260" viewBox="0 0 400 260" style="display:block; overflow:visible;">
         ${pieSegments}
-
-        <!-- center hole -->
         <circle cx="${centerX}" cy="${centerY}" r="${innerRadius}" fill="#f4f5f7"/>
-
         ${labelsHtml}
       </svg>
     </div>
