@@ -2349,6 +2349,136 @@ const CampaignReportTabs = () => {
     return div;
   };
 
+
+  const createPieChartWithOutsideLabels = (data, title) => {
+    if (!data || data.length === 0) {
+      return `
+      <div style="background:#fff;padding:20px;border-radius:16px;text-align:center;">
+        <h4 style="color:#444;margin-bottom:15px;font-size:18px;font-family:sans-serif;">${title}</h4>
+        <p style="color:#999;font-family:sans-serif;">No data available</p>
+      </div>
+    `;
+    }
+
+    const total = data.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
+    const colors = ['#9fb6c3', '#7d8ca3', '#c2ccd3'];
+
+    let pieSegments = '';
+    let labelsHtml = '';
+    let currentAngle = 0;
+
+    // Adjusted center and increased sizes
+    const centerX = 200;
+    const centerY = 150;
+
+    // INCREASED RADII for a larger chart
+    const outerRadius = 100; // Was 75
+    const innerRadius = 60;  // Was 45
+
+    const validData = data.filter(item => (parseFloat(item.value) || 0) > 0);
+
+    validData.forEach((item, index) => {
+      const value = parseFloat(item.value) || 0;
+      const percentage = total > 0 ? (value / total) * 100 : 0;
+      const angle = (percentage / 100) * 360;
+
+      if (angle <= 0) return;
+
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + angle;
+
+      const startRad = (startAngle - 90) * Math.PI / 180;
+      const endRad = (endAngle - 90) * Math.PI / 180;
+
+      const largeArc = angle > 180 ? 1 : 0;
+      const color = colors[index % colors.length];
+
+      // DONUT SHAPE
+      const x1Outer = centerX + outerRadius * Math.cos(startRad);
+      const y1Outer = centerY + outerRadius * Math.sin(startRad);
+      const x2Outer = centerX + outerRadius * Math.cos(endRad);
+      const y2Outer = centerY + outerRadius * Math.sin(endRad);
+
+      const x1Inner = centerX + innerRadius * Math.cos(startRad);
+      const y1Inner = centerY + innerRadius * Math.sin(startRad);
+      const x2Inner = centerX + innerRadius * Math.cos(endRad);
+      const y2Inner = centerY + innerRadius * Math.sin(endRad);
+
+      pieSegments += `
+      <path d="
+        M ${x1Outer},${y1Outer}
+        A ${outerRadius},${outerRadius} 0 ${largeArc},1 ${x2Outer},${y2Outer}
+        L ${x2Inner},${y2Inner}
+        A ${innerRadius},${innerRadius} 0 ${largeArc},0 ${x1Inner},${y1Inner}
+        Z"
+        fill="${color}"
+      />
+    `;
+
+      // ===== LARGER LABELS =====
+      const midAngle = startAngle + angle / 2;
+      const rad = (midAngle - 90) * Math.PI / 180;
+
+      // Label distance from center
+      const labelRadius = outerRadius + 20;
+
+      let labelX = centerX + labelRadius * Math.cos(rad);
+      let labelY = centerY + labelRadius * Math.sin(rad);
+
+      const isRight = Math.cos(rad) > 0;
+      const anchor = isRight ? "start" : "end";
+
+      const padding = 10;
+      const adjustedX = isRight ? labelX + padding : labelX - padding;
+
+      const roleName = item.role || item.scenario || '';
+
+      labelsHtml += `
+      <text 
+        x="${adjustedX}" 
+        y="${labelY - 2}" 
+        text-anchor="${anchor}"
+        style="font-size:14px; fill:#333; font-weight:700; font-family:sans-serif;">
+        ${roleName}
+      </text>
+
+      <text 
+        x="${adjustedX}" 
+        y="${labelY + 14}" 
+        text-anchor="${anchor}"
+        style="font-size:13px; fill:#666; font-family:sans-serif;">
+        ${percentage.toFixed(0)}%
+      </text>
+    `;
+
+      currentAngle += angle;
+    });
+
+    return `
+    <div style="background:#f4f5f7; padding:30px; border-radius:30px; max-width:450px; margin:auto;">
+      <h4 style="color:#333; text-align:center; font-size:22px; margin-bottom:20px; font-family:sans-serif;">
+        ${title}
+      </h4>
+
+      <svg 
+        width="100%" 
+        height="300" 
+        viewBox="0 0 400 300" 
+        style="display:block; overflow:visible;">
+        
+        ${pieSegments}
+
+        <!-- center hole -->
+        <circle cx="${centerX}" cy="${centerY}" r="${innerRadius}" fill="#f4f5f7"/>
+
+        ${labelsHtml}
+      </svg>
+    </div>
+  `;
+  };
+
+  // ==================== OUTBOUND PAGE PDF FUNCTION ====================
+
   const createOutboundPageWithDynamicHeight = () => {
     const data = outboundData;
     const formatDate = (date) => {
@@ -2379,148 +2509,33 @@ const CampaignReportTabs = () => {
     const areaPoints = values.map((v, i) => `${i * xStep},${h - (v / maxValue * h)}`).join(' ');
     const area = `0,${h} ${areaPoints} ${w},${h}`;
 
+    // Job Role Pie Chart with Inside Labels
     const jobRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
-    let jobRolePieChartHtml = '';
-    if (jobRoleData.length > 0) {
-      const totalValue = jobRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
-      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
+    const jobRolePieChartHtml = createPieChartWithOutsideLabels(jobRoleData, 'Job Role Distribution');
 
-      let pieSegments = '';
-      let labelsHtml = '';
-      let currentAngle = 0;
-      const centerX = 105;
-      const centerY = 105;
-      const radius = 80;
-
-      jobRoleData.forEach((item, index) => {
-        const value = parseFloat(item.value) || 0;
-        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
-        const angle = (percentage / 100) * 360;
-
-        if (angle > 0) {
-          const startAngle = currentAngle;
-          const endAngle = currentAngle + angle;
-          const startRad = (startAngle - 90) * Math.PI / 180;
-          const endRad = (endAngle - 90) * Math.PI / 180;
-          const x1 = centerX + radius * Math.cos(startRad);
-          const y1 = centerY + radius * Math.sin(startRad);
-          const x2 = centerX + radius * Math.cos(endRad);
-          const y2 = centerY + radius * Math.sin(endRad);
-          const largeArc = angle > 180 ? 1 : 0;
-
-          pieSegments += `<path d="M ${centerX},${centerY} L ${x1},${y1} A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z" fill="${colors[index % colors.length]}" stroke="white" stroke-width="2" />`;
-
-          const midAngle = startAngle + (angle / 2);
-          const labelRad = (midAngle - 90) * Math.PI / 180;
-
-          let labelDistance = radius + 45;
-          if (percentage < 15) labelDistance = radius + 55;
-          if (percentage > 30) labelDistance = radius + 40;
-
-          const labelX = centerX + labelDistance * Math.cos(labelRad);
-          const labelY = centerY + labelDistance * Math.sin(labelRad);
-          let textAnchor = 'middle';
-          let xOffset = 0;
-          let yOffset = 0;
-
-          if (midAngle >= 0 && midAngle < 90) {
-            textAnchor = 'start';
-            xOffset = 5;
-            yOffset = -5;
-          } else if (midAngle >= 90 && midAngle < 180) {
-            textAnchor = 'end';
-            xOffset = -5;
-            yOffset = -5;
-          } else if (midAngle >= 180 && midAngle < 270) {
-            textAnchor = 'end';
-            xOffset = -5;
-            yOffset = 5;
-          } else {
-            textAnchor = 'start';
-            xOffset = 5;
-            yOffset = 5;
-          }
-
-          labelsHtml += `
-          <div style="position: absolute; left: ${labelX + xOffset}px; top: ${labelY + yOffset}px; transform: translate(${textAnchor === 'middle' ? '-50%' : (textAnchor === 'start' ? '0%' : '-100%')}, -50%); background: white; padding: 6px 12px; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); white-space: nowrap; font-size: 12px; font-weight: 600; color: #333; border: 1px solid #e0e0e0; z-index: 10;">
-            ${item.role}: ${percentage.toFixed(1)}%
-          </div>
-        `;
-        }
-        currentAngle += angle;
-      });
-
-      jobRolePieChartHtml = `
-      <div style="margin-top: 20px; width: 100%; page-break-inside: avoid;">
-        <div style="background-color: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
-          <h4 style="color: #444; margin-bottom: 20px; text-align: center; font-size: 18px; font-weight: 600;">Job Role Distribution</h4>
-          <div style="position: relative; width: 100%; min-height: 320px; display: flex; justify-content: center;">
-            <div style="position: relative; width: 300px; height: 300px;">
-              <svg width="300" height="300" viewBox="0 0 210 210" style="display: block; margin: 0 auto;">
-                ${pieSegments}
-                <circle cx="${centerX}" cy="${centerY}" r="35" fill="#fdfbf2" />
-              </svg>
-              ${labelsHtml}
-            </div>
-          </div>
-          <div style="margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; padding-top: 10px; border-top: 1px solid #f0f0f0;">
-            ${jobRoleData.map((item, idx) => {
-        const percentage = ((parseFloat(item.value) || 0) / totalValue * 100).toFixed(1);
-        return `
-                <div style="display: flex; align-items: center; gap: 8px;">
-                  <div style="width: 12px; height: 12px; background-color: ${colors[idx % colors.length]}; border-radius: 3px;"></div>
-                  <span style="font-size: 12px; color: #555;"><strong>${item.role}</strong>: ${percentage}%</span>
-                </div>
-              `;
-      }).join('')}
-          </div>
-        </div>
-      </div>
-    `;
-    } else {
-      jobRolePieChartHtml = `
-      <div style="margin-top: 20px; width: 100%;">
-        <div style="background-color: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center;">
-          <h4 style="color: #444; margin-bottom: 20px;">Job Role Distribution</h4>
-          <p style="color: #999;">No role distribution data available</p>
-        </div>
-      </div>
-    `;
-    }
-
+    // Job Scenario Cards
     const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
     let jobScenarioCardsHtml = '';
     if (jobScenarioData.length > 0) {
       jobScenarioCardsHtml = `
       <div style="display: flex; gap: 15px; margin-top: 20px; flex-wrap: wrap;">
         ${jobScenarioData.map(item => `
-          <div style="flex: 1; min-width: 120px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <h5 style="color: #aaa; font-size: 16px; font-weight: 400; margin-bottom: 8px;">${item.scenario}</h5>
-            <div style="font-size: 48px; font-weight: bold; color: #444;">${item.value}%</div>
+          <div style="flex: 1; min-width: 120px; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa; font-size: 14px; font-weight: 400; margin-bottom: 8px;">${item.scenario}</h5>
+            <div style="font-size: 42px; font-weight: bold; color: #4db69f;">${item.value}%</div>
           </div>
         `).join('')}
       </div>
     `;
     } else {
       jobScenarioCardsHtml = `
-      <div style="margin-top: 20px; text-align: center; padding: 20px; background: #fff; border-radius: 8px;">
+      <div style="margin-top: 20px; text-align: center; padding: 20px; background: #fff; border-radius: 12px;">
         <p style="color: #999;">No scenario distribution data available</p>
       </div>
     `;
     }
 
     const bounceRate = parseFloat(data.formData.bounceRate) || 0;
-    const maxBounce = 100;
-    const radius = 80;
-    const circumference = 2 * Math.PI * radius; // 502.65
-    const strokeDashoffset = circumference * (1 - (bounceRate / maxBounce));
-
-    // Alternative simpler calculation
-    const bouncePercentage = Math.min(bounceRate, 100);
-    const dashOffsetValue = 251 * (1 - (bouncePercentage / 100)); // 251 is for 80 radius
-
-    // In the div.innerHTML, replace the Bounce Rate SVG section with:
-
     const dateLabels = validEntries.map(entry => {
       const formattedDate = entry.date ? formatDate(entry.date) : '';
       const shortDate = formattedDate.split('/').slice(0, 2).join('/');
@@ -2546,50 +2561,46 @@ const CampaignReportTabs = () => {
       </div>
     </div>
     <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-      <div style="width: 330px;">
-        <div style="background-color: #4db69f; color: #fff; padding: 40px 20px; text-align: center; border-radius: 8px;">
-          <h4 style="font-weight: 400; font-size: 24px; margin-bottom: 20px;">Total Emails Sent</h4>
-          <div style="font-size: 80px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
+      <div style="width: 360px;">
+        <div style="background: linear-gradient(135deg, #4db69f, #3a8f7c); color: #fff; padding: 30px 20px; text-align: center; border-radius: 16px; margin-bottom: 20px;">
+          <h4 style="font-weight: 400; font-size: 20px; margin-bottom: 15px;">Total Emails Sent</h4>
+          <div style="font-size: 70px; font-weight: bold;">${data.formData.totalEmailsSent}</div>
         </div>
         ${jobRolePieChartHtml}
       </div>
       <div style="flex: 1;">
         <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <h5 style="color: #aaa;">Total Delivered</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
+            <div style="font-size: 42px; font-weight: bold;">${data.formData.totalEmailsDelivered}</div>
           </div>
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <h5 style="color: #aaa;">Daily Avg Sends</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
+            <div style="font-size: 42px; font-weight: bold;">${data.formData.dailyAvgSends}</div>
           </div>
-          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="flex: 1; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <h5 style="color: #aaa;">Hard Bounced</h5>
-            <div style="font-size: 48px; font-weight: bold;">${data.formData.totalHardBounced}</div>
+            <div style="font-size: 42px; font-weight: bold;">${data.formData.totalHardBounced}</div>
           </div>
         </div>
         <div style="display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap;">
-          <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-  <h5 style="color: #aaa;">Bounce Rate</h5>
-  <div style="text-align: center; position: relative;">
-    <svg width="180" height="120" viewBox="0 0 180 120">
-      <!-- Background arc (gray) -->
-      <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
-      <!-- Foreground arc (green) based on bounce rate -->
-      <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#28a745" stroke-width="15" stroke-linecap="round" 
-        stroke-dasharray="251" 
-        stroke-dashoffset="${251 * (1 - (bounceRate / 100))}" />
-      <!-- Needle -->
-      <line x1="90" y1="100" x2="90" y2="50" stroke="#28a745" stroke-width="3" stroke-linecap="round" 
-        transform="rotate(${(bounceRate / 100) * 180 - 90}, 90, 100)" />
-      <!-- Center circle -->
-      <circle cx="90" cy="100" r="8" fill="#28a745" />
-    </svg>
-    <div style="font-size: 48px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
-  </div>
-  <small style="color: #888; font-size: 12px;">0% - Low | 100% - High</small>
-</div>
-          <div style="flex: 1; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          <div style="width: 230px; background: #fff; padding: 20px; text-align: center; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            <h5 style="color: #aaa;">Bounce Rate</h5>
+            <div style="text-align: center; position: relative;">
+              <svg width="180" height="120" viewBox="0 0 180 120">
+                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#e0e0e0" stroke-width="15" stroke-linecap="round" />
+                <path d="M 20 100 A 80 80 0 0 1 160 100" fill="none" stroke="#4db69f" stroke-width="15" stroke-linecap="round" 
+                  stroke-dasharray="251" 
+                  stroke-dashoffset="${251 * (1 - (bounceRate / 100))}" />
+                <line x1="90" y1="100" x2="90" y2="50" stroke="#4db69f" stroke-width="3" stroke-linecap="round" 
+                  transform="rotate(${(bounceRate / 100) * 180 - 90}, 90, 100)" />
+                <circle cx="90" cy="100" r="8" fill="#4db69f" />
+              </svg>
+              <div style="font-size: 42px; font-weight: bold; color: #444; margin-top: 10px;">${bounceRate}%</div>
+            </div>
+            <small style="color: #888; font-size: 12px;">0% - Low | 100% - High</small>
+          </div>
+          <div style="flex: 1; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
             <h5 style="color: #aaa; text-align: right;">Daily Pacing Dynamic</h5>
             <div style="display: flex; margin-top: 15px;">
               <div style="height: ${h}px; display: flex; flex-direction: column; justify-content: space-between; font-size: 12px; color: #bbb; padding-right: 12px;">
@@ -2634,39 +2645,29 @@ const CampaignReportTabs = () => {
     const data = pocOpensData;
     const outbound = outboundData;
 
-    const reportTitle =
-      outbound?.formData?.reportTitle ||
-      data.formData.reportTitle ||
-      "Campaign Report";
+    const reportTitle = outbound?.formData?.reportTitle || data.formData.reportTitle || "Campaign Report";
 
     const formatDate = (date) => {
       if (!date) return "";
       const d = new Date(date);
       if (isNaN(d.getTime())) return "";
-      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}/${d.getFullYear()}`;
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
     };
 
     const dateRange = `${formatDate(outbound?.formData?.startDate)} - ${formatDate(outbound?.formData?.endDate)}`;
 
     const formatDateForDisplayFn = (dateString) => {
       const d = new Date(dateString);
-      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}`;
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
     };
 
-    const bars = data.barEntries
-      .filter((e) => e.date && e.value)
-      .map((e) => ({
-        label: formatDateForDisplayFn(e.date),
-        value: parseInt(e.value) || 0,
-      }));
+    const bars = data.barEntries.filter((e) => e.date && e.value).map((e) => ({
+      label: formatDateForDisplayFn(e.date),
+      value: parseInt(e.value) || 0,
+    }));
 
     const maxValue = Math.max(...bars.map((b) => b.value), 1);
 
-    // Calculate dynamic height based on number of bars
     const getDynamicHeight = () => {
       const barCount = bars.length;
       if (barCount <= 3) return 200;
@@ -2680,10 +2681,9 @@ const CampaignReportTabs = () => {
 
     let barChartHtml = "";
     if (bars.length > 0) {
-      barChartHtml = bars
-        .map((bar) => {
-          const percentage = (bar.value / maxValue) * 100;
-          return `
+      barChartHtml = bars.map((bar) => {
+        const percentage = (bar.value / maxValue) * 100;
+        return `
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
           <div style="width:65px;font-size:11px;color:#555;font-weight:600;text-align:right;">
             ${bar.label}
@@ -2694,103 +2694,19 @@ const CampaignReportTabs = () => {
             </div>
           </div>
         </div>`;
-        })
-        .join("");
+      }).join("");
     } else {
       barChartHtml = '<div style="text-align:center;padding:40px;color:#999;">No data</div>';
     }
 
-    // Open Role Distribution Pie Chart
+    // Open Role Pie Chart with Inside Labels
     const openRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
-    let openRolePieChartHtml = '';
+    const openRolePieChartHtml = createPieChartWithOutsideLabels(openRoleData, 'Open Role Distribution');
 
-    if (openRoleData.length > 0) {
-      const totalValue = openRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
-      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
-
-      let pieSegments = '';
-      let labelsHtml = '';
-      let currentAngle = 0;
-
-      const centerX = 130;
-      const centerY = 130;
-      const radius = 65;
-
-      openRoleData.forEach((item, index) => {
-        const value = parseFloat(item.value) || 0;
-        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
-        const angle = (percentage / 100) * 360;
-
-        if (angle > 0) {
-          const startAngle = currentAngle;
-          const endAngle = currentAngle + angle;
-
-          const startRad = (startAngle - 90) * Math.PI / 180;
-          const endRad = (endAngle - 90) * Math.PI / 180;
-
-          const x1 = centerX + radius * Math.cos(startRad);
-          const y1 = centerY + radius * Math.sin(startRad);
-          const x2 = centerX + radius * Math.cos(endRad);
-          const y2 = centerY + radius * Math.sin(endRad);
-
-          const largeArc = angle > 180 ? 1 : 0;
-
-          pieSegments += `
-        <path d="M ${centerX},${centerY}
-        L ${x1},${y1}
-        A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z"
-        fill="${colors[index % colors.length]}"
-        stroke="white"
-        stroke-width="2" />
-      `;
-
-          const midAngle = startAngle + angle / 2;
-          const labelRad = (midAngle - 90) * Math.PI / 180;
-          const labelDistance = radius + 10;
-          const labelX = centerX + labelDistance * Math.cos(labelRad);
-          const labelY = centerY + labelDistance * Math.sin(labelRad);
-          const textAnchor = labelX > centerX ? 'start' : 'end';
-          const roleName = item.role.length > 14 ? item.role.slice(0, 12) + '..' : item.role;
-
-          labelsHtml += `
-        <text 
-          x="${labelX}" 
-          y="${labelY}" 
-          text-anchor="${textAnchor}" 
-          dominant-baseline="middle"
-          style="font-size:11px; font-weight:600; fill:#333;">
-          ${roleName} (${percentage.toFixed(1)}%)
-        </text>
-      `;
-        }
-
-        currentAngle += angle;
-      });
-
-      openRolePieChartHtml = `
-    <div style="background:#fff;padding:20px 10px;border-radius:14px;overflow:visible;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;">
-        Open Role Distribution
-      </div>
-      <svg width="340" height="340" viewBox="0 0 260 260" 
-        style="margin:auto;display:block;overflow:visible;">
-        ${pieSegments}
-        <circle cx="${centerX}" cy="${centerY}" r="28" fill="#fdfbf2" />
-        ${labelsHtml}
-      </svg>
-    </div>
-  `;
-    } else {
-      openRolePieChartHtml = '<div style="background:#fff;padding:15px;border-radius:14px;text-align:center;color:#999;">No role distribution data</div>';
-    }
-
-    // Get values from Job Scenario Distribution for Manager and Director
     const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
 
     const findScenarioValue = (scenarioName) => {
-      const scenario = jobScenarioData.find(
-        item => item.scenario?.toLowerCase() === scenarioName.toLowerCase()
-      );
+      const scenario = jobScenarioData.find(item => item.scenario?.toLowerCase() === scenarioName.toLowerCase());
       return scenario ? parseFloat(scenario.value) || 0 : 0;
     };
 
@@ -2809,114 +2725,97 @@ const CampaignReportTabs = () => {
     const circumference = 2 * Math.PI * 55;
     const dashoffset = circumference * (1 - (ecOpenRatio / 100));
 
-    // Calculate the maximum height among left and center sections to align properly
-    const leftSectionHeight = 320 + (openRoleData.length > 0 ? 340 : 100);
-    const centerSectionHeight = 400;
-    const rightSectionDynamicHeight = containerHeight + 80;
-    const maxSectionHeight = Math.max(leftSectionHeight, centerSectionHeight, rightSectionDynamicHeight);
-
     div.innerHTML = `
-  <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
-    <div>
-      <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
-      <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Opens)</div>
-    </div>
-    <div style="color:#ccc;font-size:13px;">${dateRange}</div>
-  </div>
-
-  <div style="display:flex;gap:20px;align-items:stretch;min-height:${maxSectionHeight}px;">
-    <!-- LEFT SECTION -->
-    <div style="width:320px;display:flex;flex-direction:column;gap:15px;">
-      <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:20px;border-radius:14px;text-align:center;">
-        <div style="font-size:14px;margin-bottom:8px;">Total ECs Opened</div>
-        <div style="font-size:52px;font-weight:bold;">${data.formData.totalECsOpened || 0}</div>
+    <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
+      <div>
+        <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
+        <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Opens)</div>
       </div>
-      ${openRolePieChartHtml}
+      <div style="color:#ccc;font-size:13px;">${dateRange}</div>
     </div>
 
-    <!-- CENTER SECTION -->
-    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:flex-start;">
-      <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
-        <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Open Ratio</div>
-        <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
-          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#76e5eb" stroke-width="12" 
-            stroke-dasharray="${circumference}" 
-            stroke-dashoffset="${dashoffset}" 
-            stroke-linecap="round" transform="rotate(-90 70 70)" />
-          <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecOpenRatio}%</text>
-        </svg>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;">
+      <div style="width:360px;">
+        <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:25px;border-radius:14px;text-align:center;margin-bottom:20px;">
+          <div style="font-size:14px;margin-bottom:8px;">Total ECs Opened</div>
+          <div style="font-size:48px;font-weight:bold;">${data.formData.totalECsOpened || 0}</div>
+        </div>
+        ${openRolePieChartHtml}
       </div>
 
-      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
-        <span style="font-size:13px;color:#777;">Open Manager</span>
-        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openManagerValue}%</span>
+      <div style="width:240px;">
+        <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;margin-bottom:15px;">
+          <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Open Ratio</div>
+          <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
+            <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+            <circle cx="70" cy="70" r="55" fill="transparent" stroke="#4db69f" stroke-width="12" 
+              stroke-dasharray="${circumference}" 
+              stroke-dashoffset="${dashoffset}" 
+              stroke-linecap="round" transform="rotate(-90 70 70)" />
+            <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecOpenRatio}%</text>
+          </svg>
+        </div>
+
+        <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:13px;color:#777;">Open Manager</span>
+          <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openManagerValue}%</span>
+        </div>
+
+        <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+          <span style="font-size:13px;color:#777;">Open Director</span>
+          <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openDirectorValue}%</span>
+        </div>
       </div>
 
-      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
-        <span style="font-size:13px;color:#777;">Open Director</span>
-        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${openDirectorValue}%</span>
+      <div style="flex:1;background:#fff;padding:20px;border-radius:14px;">
+        <div style="text-align:center;margin-bottom:10px;">
+          <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
+        </div>
+        <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
+          Synced from Outbound Performance
+        </div>
+        <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
+          ${barChartHtml}
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
+          ${bars.length} entries • Max ${maxValue}
+        </div>
       </div>
     </div>
-
-    <!-- RIGHT SECTION - Daily Pacing Dynamic with dynamic height and centered vertically -->
-    <div style="flex:1;background:#fff;padding:20px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;">
-      <div style="text-align:center;margin-bottom:10px;">
-        <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
-      </div>
-      <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
-        Synced from Outbound Performance
-      </div>
-      <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
-        ${barChartHtml}
-      </div>
-      <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
-        ${bars.length} entries • Max ${maxValue}
-      </div>
-    </div>
-  </div>
-`;
+  `;
 
     return div;
   };
+
+  // ==================== CLICKS PAGE PDF FUNCTION ====================
 
   const createPocClicksPageWithNoSpacing = () => {
     const data = pocClicksData;
     const outbound = outboundData;
 
-    const reportTitle =
-      outbound?.formData?.reportTitle ||
-      data.formData.reportTitle ||
-      "Campaign Report";
+    const reportTitle = outbound?.formData?.reportTitle || data.formData.reportTitle || "Campaign Report";
 
     const formatDate = (date) => {
       if (!date) return "";
       const d = new Date(date);
       if (isNaN(d.getTime())) return "";
-      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}/${d.getFullYear()}`;
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear()}`;
     };
 
     const dateRange = `${formatDate(outbound?.formData?.startDate)} - ${formatDate(outbound?.formData?.endDate)}`;
 
     const formatDateForDisplayFn = (dateString) => {
       const d = new Date(dateString);
-      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-        .toString()
-        .padStart(2, "0")}`;
+      return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}`;
     };
 
-    const bars = data.barEntries
-      .filter((e) => e.date && e.value)
-      .map((e) => ({
-        label: formatDateForDisplayFn(e.date),
-        value: parseInt(e.value) || 0,
-      }));
+    const bars = data.barEntries.filter((e) => e.date && e.value).map((e) => ({
+      label: formatDateForDisplayFn(e.date),
+      value: parseInt(e.value) || 0,
+    }));
 
     const maxValue = Math.max(...bars.map((b) => b.value), 1);
 
-    // Calculate dynamic height based on number of bars
     const getDynamicHeight = () => {
       const barCount = bars.length;
       if (barCount <= 3) return 200;
@@ -2930,10 +2829,9 @@ const CampaignReportTabs = () => {
 
     let barChartHtml = "";
     if (bars.length > 0) {
-      barChartHtml = bars
-        .map((bar) => {
-          const percentage = (bar.value / maxValue) * 100;
-          return `
+      barChartHtml = bars.map((bar) => {
+        const percentage = (bar.value / maxValue) * 100;
+        return `
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
           <div style="width:65px;font-size:11px;color:#555;font-weight:600;text-align:right;">
             ${bar.label}
@@ -2944,103 +2842,19 @@ const CampaignReportTabs = () => {
             </div>
           </div>
         </div>`;
-        })
-        .join("");
+      }).join("");
     } else {
       barChartHtml = '<div style="text-align:center;padding:40px;color:#999;">No data</div>';
     }
 
-    // Click Role Distribution Pie Chart
+    // Click Role Pie Chart with Inside Labels
     const clickRoleData = data.jobRoleEntries?.filter(e => e.role && e.value) || [];
-    let clickRolePieChartHtml = '';
+    const clickRolePieChartHtml = createPieChartWithOutsideLabels(clickRoleData, 'Click Role Distribution');
 
-    if (clickRoleData.length > 0) {
-      const totalValue = clickRoleData.reduce((sum, item) => sum + (parseFloat(item.value) || 0), 0);
-      const colors = ['#7d8bb1', '#a2bad0', '#d1eef4', '#4db69f', '#f4a261', '#e76f51', '#2a9d8f', '#e9c46a'];
-
-      let pieSegments = '';
-      let labelsHtml = '';
-      let currentAngle = 0;
-
-      const centerX = 130;
-      const centerY = 130;
-      const radius = 65;
-
-      clickRoleData.forEach((item, index) => {
-        const value = parseFloat(item.value) || 0;
-        const percentage = totalValue > 0 ? (value / totalValue) * 100 : 0;
-        const angle = (percentage / 100) * 360;
-
-        if (angle > 0) {
-          const startAngle = currentAngle;
-          const endAngle = currentAngle + angle;
-
-          const startRad = (startAngle - 90) * Math.PI / 180;
-          const endRad = (endAngle - 90) * Math.PI / 180;
-
-          const x1 = centerX + radius * Math.cos(startRad);
-          const y1 = centerY + radius * Math.sin(startRad);
-          const x2 = centerX + radius * Math.cos(endRad);
-          const y2 = centerY + radius * Math.sin(endRad);
-
-          const largeArc = angle > 180 ? 1 : 0;
-
-          pieSegments += `
-        <path d="M ${centerX},${centerY}
-        L ${x1},${y1}
-        A ${radius},${radius} 0 ${largeArc},1 ${x2},${y2} Z"
-        fill="${colors[index % colors.length]}"
-        stroke="white"
-        stroke-width="2" />
-      `;
-
-          const midAngle = startAngle + angle / 2;
-          const labelRad = (midAngle - 90) * Math.PI / 180;
-          const labelDistance = radius + 10;
-          const labelX = centerX + labelDistance * Math.cos(labelRad);
-          const labelY = centerY + labelDistance * Math.sin(labelRad);
-          const textAnchor = labelX > centerX ? 'start' : 'end';
-          const roleName = item.role.length > 14 ? item.role.slice(0, 12) + '..' : item.role;
-
-          labelsHtml += `
-        <text 
-          x="${labelX}" 
-          y="${labelY}" 
-          text-anchor="${textAnchor}" 
-          dominant-baseline="middle"
-          style="font-size:11px; font-weight:600; fill:#333;">
-          ${roleName} (${percentage.toFixed(1)}%)
-        </text>
-      `;
-        }
-
-        currentAngle += angle;
-      });
-
-      clickRolePieChartHtml = `
-    <div style="background:#fff;padding:20px 10px;border-radius:14px;overflow:visible;">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;text-align:center;">
-        Click Role Distribution
-      </div>
-      <svg width="340" height="340" viewBox="0 0 260 260" 
-        style="margin:auto;display:block;overflow:visible;">
-        ${pieSegments}
-        <circle cx="${centerX}" cy="${centerY}" r="28" fill="#fdfbf2" />
-        ${labelsHtml}
-      </svg>
-    </div>
-  `;
-    } else {
-      clickRolePieChartHtml = '<div style="background:#fff;padding:15px;border-radius:14px;text-align:center;color:#999;">No role distribution data</div>';
-    }
-
-    // Get values from Job Scenario Distribution for Manager and Director
     const jobScenarioData = data.jobScenarioEntries?.filter(e => e.scenario && e.value) || [];
 
     const findScenarioValue = (scenarioName) => {
-      const scenario = jobScenarioData.find(
-        item => item.scenario?.toLowerCase() === scenarioName.toLowerCase()
-      );
+      const scenario = jobScenarioData.find(item => item.scenario?.toLowerCase() === scenarioName.toLowerCase());
       return scenario ? parseFloat(scenario.value) || 0 : 0;
     };
 
@@ -3059,76 +2873,68 @@ const CampaignReportTabs = () => {
     const circumference = 2 * Math.PI * 55;
     const dashoffset = circumference * (1 - (ecClickRatio / 100));
 
-    // Calculate the maximum height among left and center sections to align properly
-    const leftSectionHeight = 320 + (clickRoleData.length > 0 ? 340 : 100);
-    const centerSectionHeight = 400;
-    const rightSectionDynamicHeight = containerHeight + 80;
-    const maxSectionHeight = Math.max(leftSectionHeight, centerSectionHeight, rightSectionDynamicHeight);
-
     div.innerHTML = `
-  <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
-    <div>
-      <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
-      <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Clicks)</div>
-    </div>
-    <div style="color:#ccc;font-size:13px;">${dateRange}</div>
-  </div>
-
-  <div style="display:flex;gap:20px;align-items:stretch;min-height:${maxSectionHeight}px;">
-    <!-- LEFT SECTION -->
-    <div style="width:320px;display:flex;flex-direction:column;gap:15px;">
-      <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:20px;border-radius:14px;text-align:center;">
-        <div style="font-size:14px;margin-bottom:8px;">Total ECs Clicked</div>
-        <div style="font-size:52px;font-weight:bold;">${data.formData.totalECsClicked || 0}</div>
+    <div style="background:#545454;padding:18px 40px;border-left:15px solid #4db69f;margin-bottom:20px;border-radius:8px;display:flex;justify-content:space-between;">
+      <div>
+        <h1 style="color:#fff;margin:0;font-size:32px;">${reportTitle}</h1>
+        <div style="color:#ddd;font-size:14px;">PoC Engagement Stats (Clicks)</div>
       </div>
-      ${clickRolePieChartHtml}
+      <div style="color:#ccc;font-size:13px;">${dateRange}</div>
     </div>
 
-    <!-- CENTER SECTION -->
-    <div style="width:240px;display:flex;flex-direction:column;gap:15px;justify-content:flex-start;">
-      <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;">
-        <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Click Ratio</div>
-        <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
-          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
-          <circle cx="70" cy="70" r="55" fill="transparent" stroke="#76e5eb" stroke-width="12" 
-            stroke-dasharray="${circumference}" 
-            stroke-dashoffset="${dashoffset}" 
-            stroke-linecap="round" transform="rotate(-90 70 70)" />
-          <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecClickRatio}%</text>
-        </svg>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;">
+      <div style="width:360px;">
+        <div style="background:linear-gradient(135deg,#4db69f,#3a8f7c);color:#fff;padding:25px;border-radius:14px;text-align:center;margin-bottom:20px;">
+          <div style="font-size:14px;margin-bottom:8px;">Total ECs Clicked</div>
+          <div style="font-size:48px;font-weight:bold;">${data.formData.totalECsClicked || 0}</div>
+        </div>
+        ${clickRolePieChartHtml}
       </div>
 
-      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
-        <span style="font-size:13px;color:#777;">Clicks Manager</span>
-        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksManagerValue}%</span>
+      <div style="width:240px;">
+        <div style="background:#fff;padding:18px;border-radius:14px;text-align:center;margin-bottom:15px;">
+          <div style="font-size:12px;color:#888;margin-bottom:10px;">EC Click Ratio</div>
+          <svg width="140" height="140" viewBox="0 0 140 140" style="margin:0 auto;">
+            <circle cx="70" cy="70" r="55" fill="transparent" stroke="#e0e0e0" stroke-width="12" />
+            <circle cx="70" cy="70" r="55" fill="transparent" stroke="#4db69f" stroke-width="12" 
+              stroke-dasharray="${circumference}" 
+              stroke-dashoffset="${dashoffset}" 
+              stroke-linecap="round" transform="rotate(-90 70 70)" />
+            <text x="70" y="78" text-anchor="middle" font-size="22" font-weight="bold" fill="#333">${ecClickRatio}%</text>
+          </svg>
+        </div>
+
+        <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;margin-bottom:10px;">
+          <span style="font-size:13px;color:#777;">Clicks Manager</span>
+          <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksManagerValue}%</span>
+        </div>
+
+        <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
+          <span style="font-size:13px;color:#777;">Clicks Director</span>
+          <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksDirectorValue}%</span>
+        </div>
       </div>
 
-      <div style="background:#fff;padding:14px;border-radius:14px;display:flex;justify-content:space-between;">
-        <span style="font-size:13px;color:#777;">Clicks Director</span>
-        <span style="font-size:22px;font-weight:bold;color:#4db69f;">${clicksDirectorValue}%</span>
+      <div style="flex:1;background:#fff;padding:20px;border-radius:14px;">
+        <div style="text-align:center;margin-bottom:10px;">
+          <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
+        </div>
+        <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
+          Synced from Opens Performance
+        </div>
+        <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
+          ${barChartHtml}
+        </div>
+        <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
+          ${bars.length} entries • Max ${maxValue}
+        </div>
       </div>
     </div>
-
-    <!-- RIGHT SECTION - Daily Pacing Dynamic with dynamic height and centered vertically -->
-    <div style="flex:1;background:#fff;padding:20px;border-radius:14px;display:flex;flex-direction:column;justify-content:center;">
-      <div style="text-align:center;margin-bottom:10px;">
-        <span style="font-size:12px;color:#4db69f;font-weight:700;">📊 DAILY PACING DYNAMIC</span>
-      </div>
-      <div style="text-align:right;margin-bottom:10px;color:#aaa;font-size:11px;font-style:italic;">
-        Synced from Opens Performance
-      </div>
-      <div style="max-height:${containerHeight}px;overflow-y:auto;padding-right:8px;">
-        ${barChartHtml}
-      </div>
-      <div style="margin-top:12px;font-size:11px;color:#999;text-align:center;">
-        ${bars.length} entries • Max ${maxValue}
-      </div>
-    </div>
-  </div>
-`;
+  `;
 
     return div;
   };
+
 
   const createLandingPageWithNoSpacing = () => {
     const data = landingPageData;
