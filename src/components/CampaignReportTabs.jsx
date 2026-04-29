@@ -2301,7 +2301,9 @@ const CampaignReportTabs = () => {
     // --- Image URLs ---
     const bookCoverUrl = "https://picsum.photos/seed/report/300/400";
     // Aapka provided Logo URL
-    const logoUrl = "https://media.licdn.com/dms/image/v2/D4D0BAQF8tBleLHtOoA/company-logo_200_200/B4DZhxnf90HYAI-/0/1754252837229/b2bindemand_logo?e=2147483647&v=beta&t=qo2BaNcIxWJCCOsYwA-iI5KcaCvz5-3OCiRLl65oENQ";
+    const corsProxy = "https://cors-anywhere.herokuapp.com/";
+    const originalUrl = "https://b2b-oldbackup.b2bindemand.com/wp-content/uploads/2024/12/B2BinDemand-Logo-1.png.webp";
+    const logoUrl = corsProxy + originalUrl;
 
     div.innerHTML = `
     <div style="width: 240px; height: 100%; background: #ffffff; position: relative; display: flex; align-items: center; justify-content: flex-end;">
