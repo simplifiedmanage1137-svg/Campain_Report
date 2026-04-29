@@ -2301,9 +2301,7 @@ const CampaignReportTabs = () => {
     // --- Image URLs ---
     const bookCoverUrl = "https://picsum.photos/seed/report/300/400";
     // Aapka provided Logo URL
-    const corsProxy = "https://cors-anywhere.herokuapp.com/";
-    const originalUrl = "https://b2b-oldbackup.b2bindemand.com/wp-content/uploads/2024/12/B2BinDemand-Logo-1.png.webp";
-    const logoUrl = corsProxy + originalUrl;
+    const logoUrl = "https://b2b-oldbackup.b2bindemand.com/wp-content/uploads/2024/12/B2BinDemand-Logo-1.png.webp";
 
     div.innerHTML = `
     <div style="width: 240px; height: 100%; background: #ffffff; position: relative; display: flex; align-items: center; justify-content: flex-end;">
@@ -2318,7 +2316,7 @@ const CampaignReportTabs = () => {
       <div style="display: flex; flex-direction: column; align-items: flex-end;">
         <img src="${logoUrl}" 
              alt="Ventes Logo" 
-             style="width: 80px; height: 80px; object-fit: contain; margin-bottom: 5px;" 
+             style="width: 220px; height: 53px; object-fit: contain; margin-bottom: 5px;" 
              onerror="this.style.display='none';" />
         <div style="color: #4db69f; font-weight: bold; font-size: 14px; letter-spacing: 0.5px;">
            B2B Technologies Inc.

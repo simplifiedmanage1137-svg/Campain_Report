@@ -17,13 +17,13 @@ const CampaignReport = () => {
             display: 'flex', 
             justifyContent: 'center', 
             alignItems: 'center',
-            backgroundColor: '#e9ecef', // Background subtle gray
+            backgroundColor: '#e9ecef',
             overflow: 'hidden',
             fontFamily: 'sans-serif'
         }}>
             <div className="position-relative shadow-lg d-flex align-items-center"
                  style={{ 
-                     backgroundColor: '#fcfaf2', // Off-white/cream background from image
+                     backgroundColor: '#fcfaf2',
                      width: '1000px',
                      height: '550px',
                      borderRadius: '4px'
@@ -34,20 +34,37 @@ const CampaignReport = () => {
                      style={{ width: '28%', backgroundColor: '#ffffff', zIndex: 1 }}>
                 </div>
 
-                {/* Logo Section */}
+                {/* Logo Section - Updated with your image */}
                 <div className="position-absolute top-0 end-0 p-4 text-center" style={{ zIndex: 20 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        {/* Simplified SVG Logo mimicking the Ventes Icon */}
-                        <svg width="40" height="40" viewBox="0 0 100 100">
-                           <path d="M20 20 L50 50 L80 20" stroke="#0056b3" strokeWidth="12" fill="none"/>
-                           <path d="M50 50 L80 80 L20 80" stroke="#28a745" strokeWidth="12" fill="none"/>
-                        </svg>
-                        <div style={{ fontWeight: '700', fontSize: '1.2rem', color: '#4a4a4a', letterSpacing: '2px', marginTop: '5px' }}>
-                            VENTES
-                        </div>
-                        <div style={{ fontSize: '0.6rem', color: '#0056b3', fontWeight: 'bold' }}>
-                            B2B Technologies Inc.
-                        </div>
+                        <img 
+                            src="https://b2b-oldbackup.b2bindemand.com/wp-content/uploads/2024/12/B2BinDemand-Logo-1.png.webp"
+                            alt="B2BinDemand Logo"
+                            style={{
+                                width: '220px',
+                                height: '53px',
+                                objectFit: 'contain',
+                                marginBottom: '5px'
+                            }}
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.style.display = 'none';
+                                // Optional: Add fallback text if image fails to load
+                                const parent = e.target.parentElement;
+                                const fallback = document.createElement('div');
+                                fallback.style.width = '80px';
+                                fallback.style.height = '80px';
+                                fallback.style.backgroundColor = '#4db69f';
+                                fallback.style.borderRadius = '12px';
+                                fallback.style.display = 'flex';
+                                fallback.style.alignItems = 'center';
+                                fallback.style.justifyContent = 'center';
+                                fallback.style.marginBottom = '5px';
+                                fallback.innerHTML = '<span style="color: white; font-size: 24px; font-weight: bold;">B2B</span>';
+                                parent.insertBefore(fallback, e.target);
+                                e.target.remove();
+                            }}
+                        />
                     </div>
                 </div>
 
